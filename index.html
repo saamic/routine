@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0" />
   <meta name="theme-color" content="#E9E2E6" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#10151F" media="(prefers-color-scheme: dark)" />
-  <title>Morning Routine</title>
+  <title>Routine</title>
 
   <!-- PWA: installable home-screen app + offline -->
   <link rel="manifest" href="manifest.webmanifest" />
@@ -14,11 +14,16 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Morning" />
+  <meta name="apple-mobile-web-app-title" content="Routine" />
+
   <style>
+    :root { color-scheme: light dark; }
     html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
     #root { height: 100%; }
     * { -webkit-tap-highlight-color: transparent; }
+    /* avoid a white flash before React mounts / behind the status bar */
+    body { background: #E9E2E6; }
+    @media (prefers-color-scheme: dark) { body { background: #10151F; } }
   </style>
 </head>
 <body>
@@ -38,11 +43,11 @@
     crossorigin="anonymous"></script>
 
   <script type="text/babel" data-presets="react">
-    const { useState, useEffect, useCallback, useRef } = React;
+    const { useState, useEffect, useCallback } = React;
 
-    // ── "After waking" routine — verbatim from the Psychohabitual
-    //    optimization note in Evernote (isometric hold sits after neck training).
-    const STEPS = [
+    // ── Morning ("After waking") — verbatim from the Psychohabitual optimization
+    //    note in Evernote (isometric hold sits after neck training).
+    const MORNING_STEPS = [
       "Do not rush, think slowly and deliberately, and do things one at a time",
       "Do not aimlessly scroll media in bed",
       "Open blinds to let in natural light",
@@ -62,20 +67,40 @@
       "Make sure snacks are available in fridge (fresh salmon, fruits, nuts, nut butter, carrots, watermelon, Greek yogurt, greens)",
     ];
 
+    // ── Night — verbatim from the same note's "Night" routine.
+    const NIGHT_STEPS = [
+      "To-do review",
+      "Priorities review",
+      "Self-organization review",
+      "Mobility training",
+      "Aesthetic check",
+      "Brush teeth",
+      "Shower (≤ every 3 days) / rinse (≤ every 2 days)",
+      "Do skincare (cleanse, moisturizer, retinol)",
+      "Set up alarms if required",
+    ];
+
+    const STEPS_BY_MODE = { morning: MORNING_STEPS, night: NIGHT_STEPS };
+    const MODE_META = {
+      morning: { label: "Morning", theme: "light",
+        doneSub: "You're ready for the day — check off your morning routine in Todoist." },
+      night: { label: "Night", theme: "dark",
+        doneSub: "You're set for the night — check off your night routine in Todoist." },
+    };
+
     // ── Mobility circuit — verbatim from "Project Bend, Extend, and Mend".
-    //    "30s or 90s per stretch" is the note's own guidance.
+    //    Timers only on the stretches; hold options are 35s / 95s.
     const MOBILITY = [
-      { section: "Rollouts", items: ["Shoulders", "Neck", "Upper torso", "Hips", "Knees", "Ankles"] },
-      { section: "Dynamic movements", items: ["Jumps", "Lunges", "High knees", "Leg swings", "90-90 rotations", "Hip CARs"] },
-      { section: "Stretches", items: ["Elephant walk", "Half kneeling stretch, back and forth", "Couch stretch", "Glute stretch / pigeon stretch", "Split stretch", "Foot on wall, then take off", "Butterfly stretch"] },
+      { section: "Rollouts", timed: false, items: ["Shoulders", "Neck", "Upper torso", "Hips", "Knees", "Ankles"] },
+      { section: "Dynamic movements", timed: false, items: ["Jumps", "Lunges", "High knees", "Leg swings", "90-90 rotations", "Hip CARs"] },
+      { section: "Stretches", timed: true, items: ["Elephant walk", "Half kneeling stretch back and forth", "Split stretch", "Couch stretch", "Glute stretch / pigeon stretch", "Put foot on wall and then take off", "Butterfly stretch"] },
     ];
     const MOBILITY_TOTAL = MOBILITY.reduce((n, s) => n + s.items.length, 0);
+    const HOLDS = [35, 95];
 
-    const N = STEPS.length;
-    const MOBILITY_IDX = STEPS.findIndex((s) => s.toLowerCase().includes("mobility training")); // 0-based
-    const STORAGE_KEY = "morning-routine-progress";
-    const THEME_KEY = "morning-routine-theme";
-    const HOLD_KEY = "morning-routine-hold";
+    const MANTRA = "Keep calm, analyze, and optimize";
+    const MODE_KEY = "routine-mode";
+    const progKey = (m) => `routine-progress-${m}`;
 
     function todayStr() {
       const d = new Date();
@@ -95,7 +120,7 @@
       return `rgb(${mix(0)}, ${mix(2)}, ${mix(4)})`;
     }
 
-    // dawn (cool, pre-light) → morning (warm daylight), per theme
+    // dawn (cool, pre-light) → warm daylight, per theme
     const GRADIENTS = {
       light: { COOL_TOP: "#D9E2EC", COOL_BOT: "#E9E2E6", WARM_TOP: "#F4ECDC", WARM_BOT: "#F8E4D2" },
       dark:  { COOL_TOP: "#10151F", COOL_BOT: "#141019", WARM_TOP: "#1E1710", WARM_BOT: "#23160F" },
@@ -106,9 +131,9 @@
 
     .mr-root{
       --txt:#26333F; --sub:#6B7885; --accent:#35695E; --accentH:#2C5A50;
-      --btnTxt:#FBFAF7; --track:rgba(38,51,63,.13); --ghost:#8A96A1; --whisper:#A2ADB6;
+      --btnTxt:#FBFAF7; --track:rgba(38,51,63,.13); --ghost:#8A96A1;
       --rowBorder:rgba(38,51,63,.12); --chipBg:rgba(53,105,94,.10); --chipTxt:#35695E;
-      --panelBg:rgba(255,255,255,.34); --shadow:rgba(38,51,63,.14);
+      --shadow:rgba(38,51,63,.14);
       height:100dvh; width:100%;
       display:flex; justify-content:center;
       color:var(--txt);
@@ -119,9 +144,9 @@
     }
     .mr-root[data-theme="dark"]{
       --txt:#E8EDF1; --sub:#9AA7B2; --accent:#55988A; --accentH:#66A99B;
-      --btnTxt:#0E1519; --track:rgba(232,237,241,.15); --ghost:#7E8A94; --whisper:#5C6771;
+      --btnTxt:#0E1519; --track:rgba(232,237,241,.15); --ghost:#7E8A94;
       --rowBorder:rgba(232,237,241,.12); --chipBg:rgba(85,152,138,.16); --chipTxt:#7FC3B4;
-      --panelBg:rgba(255,255,255,.05); --shadow:rgba(0,0,0,.35);
+      --shadow:rgba(0,0,0,.35);
     }
     .mr-frame{
       position:relative;
@@ -174,7 +199,7 @@
     }
     .mr-sub{ font-size:1.02rem; line-height:1.5; color:var(--sub); margin:0; max-width:30ch;
       animation:mr-rise 700ms cubic-bezier(.22,1,.36,1) both; }
-    .mr-bottom{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:.85rem; padding-top:.4rem; }
+    .mr-bottom{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:.85rem; min-height:1rem; }
     .mr-btn{
       appearance:none; border:none; cursor:pointer;
       background:var(--accent); color:var(--btnTxt);
@@ -185,13 +210,18 @@
     }
     .mr-btn:hover{ background:var(--accentH); }
     .mr-btn:active{ transform:translateY(1px); }
+    .mr-mantra{
+      font-family:'Fraunces',Georgia,serif; font-weight:400;
+      font-size:clamp(1.15rem,4.7vw,1.42rem); line-height:1.35;
+      white-space:normal; max-width:19rem; padding:1.15rem 2.2rem; border-radius:1.7rem;
+      animation:mr-rise 700ms cubic-bezier(.22,1,.36,1) both;
+    }
     .mr-ghost{
       appearance:none; border:none; background:none; cursor:pointer;
       font-family:inherit; font-size:.92rem; color:var(--ghost);
       padding:.35rem .7rem; border-radius:8px; transition:color 160ms ease;
     }
     .mr-ghost:hover{ color:var(--txt); }
-    .mr-whisper{ margin-top:.3rem; font-size:.74rem; letter-spacing:.09em; color:var(--whisper); }
     .mr-btn:focus-visible, .mr-ghost:focus-visible, .mr-theme:focus-visible{
       outline:2px solid var(--accent); outline-offset:3px;
     }
@@ -200,20 +230,16 @@
     .mob-wrap{ display:flex; flex-direction:column; min-height:0; flex:1 1 auto; width:100%;
       animation:mr-rise 620ms cubic-bezier(.22,1,.36,1) both; }
     .mob-head{ font-family:'Fraunces',Georgia,serif; font-weight:400;
-      font-size:clamp(1.35rem,5vw,1.8rem); letter-spacing:-.01em; margin:0 0 .15rem; color:var(--txt); }
-    .mob-controls{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin:.5rem 0 .2rem; flex-wrap:wrap; }
-    .mob-seg{ display:inline-flex; border:1px solid var(--rowBorder); border-radius:999px; overflow:hidden; }
-    .mob-seg button{ appearance:none; border:none; background:none; cursor:pointer; font:inherit;
-      font-size:.82rem; padding:.32rem .85rem; color:var(--sub); transition:background 160ms ease, color 160ms ease; }
-    .mob-seg button.on{ background:var(--accent); color:var(--btnTxt); }
-    .mob-prog{ font-size:.78rem; color:var(--sub); font-variant-numeric:tabular-nums; }
+      font-size:clamp(1.35rem,5vw,1.8rem); letter-spacing:-.01em; margin:0; color:var(--txt); }
+    .mob-controls{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin:.35rem 0 .1rem; }
+    .mob-prog{ font-size:.8rem; color:var(--sub); font-variant-numeric:tabular-nums; }
     .mob-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
       margin-top:.2rem; padding-right:.3rem;
       -webkit-mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - .7rem),transparent);
               mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - .7rem),transparent); }
     .mob-section{ font-family:'Fraunces',Georgia,serif; font-size:.95rem; font-weight:500;
       color:var(--sub); margin:.85rem 0 .1rem; letter-spacing:.01em; }
-    .mob-row{ display:flex; align-items:center; gap:.65rem; padding:.5rem 0; border-bottom:1px solid var(--rowBorder); }
+    .mob-row{ display:flex; align-items:center; gap:.6rem; padding:.5rem 0; border-bottom:1px solid var(--rowBorder); }
     .mob-check{ flex:0 0 auto; width:1.35rem; height:1.35rem; border-radius:7px;
       border:1.5px solid var(--rowBorder); background:none; cursor:pointer;
       display:flex; align-items:center; justify-content:center; color:var(--btnTxt);
@@ -222,22 +248,26 @@
     .mob-label{ flex:1 1 auto; font-size:.98rem; color:var(--txt); text-align:left; line-height:1.3;
       background:none; border:none; padding:0; font-family:inherit; cursor:pointer; }
     .mob-label.on{ color:var(--sub); text-decoration:line-through; }
-    .mob-chip{ flex:0 0 auto; appearance:none; border:none; cursor:pointer; font:inherit;
-      font-size:.82rem; font-variant-numeric:tabular-nums; padding:.36rem .7rem; border-radius:999px;
-      background:var(--chipBg); color:var(--chipTxt); min-width:3.9rem; text-align:center;
+    .mob-durs{ flex:0 0 auto; display:flex; align-items:center; gap:.3rem; }
+    .mob-chip{ appearance:none; border:none; cursor:pointer; font:inherit;
+      font-size:.8rem; font-variant-numeric:tabular-nums; padding:.34rem .55rem; border-radius:999px;
+      background:var(--chipBg); color:var(--chipTxt); min-width:3.3rem; text-align:center;
       transition:background 140ms ease, color 140ms ease; }
     .mob-chip.run{ background:var(--accent); color:var(--btnTxt); }
+    .mob-reset{ appearance:none; border:none; background:none; cursor:pointer; color:var(--sub);
+      font-size:1.05rem; line-height:1; padding:.2rem .3rem; border-radius:6px; transition:color 140ms ease; }
+    .mob-reset:hover{ color:var(--txt); }
 
     @keyframes mr-rise{ from{opacity:0; transform:translateY(8px);} to{opacity:1; transform:none;} }
     @media (prefers-reduced-motion: reduce){
       .mr-root,.mr-fill,.mr-btn,.mr-theme{ transition:none; }
-      .mr-step,.mr-lead,.mr-sub,.mob-wrap{ animation:none; }
+      .mr-step,.mr-lead,.mr-sub,.mr-mantra,.mob-wrap{ animation:none; }
     }
     `;
 
     // Soft two-note chime + haptic when a hold completes.
     function useChime() {
-      const ctxRef = useRef(null);
+      const ctxRef = React.useRef(null);
       return useCallback(() => {
         try {
           const AC = window.AudioContext || window.webkitAudioContext;
@@ -259,74 +289,66 @@
             o.start(t);
             o.stop(t + 0.55);
           }
-        } catch (e) {
-          /* audio is best-effort */
-        }
+        } catch (e) { /* audio is best-effort */ }
         try { if (navigator.vibrate) navigator.vibrate(110); } catch (e) {}
       }, []);
     }
 
     function MobilityChecklist() {
-      const [hold, setHold] = useState(() => (Number(localStorage.getItem(HOLD_KEY)) === 90 ? 90 : 30));
       const [done, setDone] = useState(() => new Set());
-      const [activeKey, setActiveKey] = useState(null);
+      const [active, setActive] = useState(null); // { key, dur }
       const [running, setRunning] = useState(false);
       const [remaining, setRemaining] = useState(0);
       const chime = useChime();
 
-      useEffect(() => { try { localStorage.setItem(HOLD_KEY, String(hold)); } catch (e) {} }, [hold]);
-
-      // countdown tick
       useEffect(() => {
-        if (!running || !activeKey) return;
+        if (!running || !active) return;
         const id = setInterval(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
         return () => clearInterval(id);
-      }, [running, activeKey]);
+      }, [running, active]);
 
-      // completion
       useEffect(() => {
-        if (running && activeKey && remaining === 0) {
-          const finished = activeKey;
+        if (running && active && remaining === 0) {
+          const finished = active.key;
           setDone((d) => { const n = new Set(d); n.add(finished); return n; });
           setRunning(false);
-          setActiveKey(null);
+          setActive(null);
           chime();
         }
-      }, [remaining, running, activeKey, chime]);
+      }, [remaining, running, active, chime]);
 
-      const onChip = useCallback((key) => {
-        setActiveKey((cur) => {
-          if (cur === key) { setRunning((r) => !r); return cur; } // pause / resume in place
-          setRemaining(hold); setRunning(true); return key;        // switch to a fresh hold
+      const onDur = useCallback((key, dur) => {
+        setActive((cur) => {
+          if (cur && cur.key === key && cur.dur === dur) { setRunning((r) => !r); return cur; } // pause/resume
+          setRemaining(dur); setRunning(true); return { key, dur };                              // fresh hold
         });
-      }, [hold]);
+      }, []);
+
+      const onReset = useCallback((key) => {
+        setActive((cur) => {
+          if (cur && cur.key === key) { setRunning(false); setRemaining(0); return null; }
+          return cur;
+        });
+      }, []);
 
       const toggleDone = useCallback((key) => {
         setDone((d) => { const n = new Set(d); n.has(key) ? n.delete(key) : n.add(key); return n; });
       }, []);
 
       const resetAll = useCallback(() => {
-        setDone(new Set()); setActiveKey(null); setRunning(false); setRemaining(0);
+        setDone(new Set()); setActive(null); setRunning(false); setRemaining(0);
       }, []);
 
       return (
         <div className="mob-wrap">
           <p className="mob-head">Mobility training</p>
           <div className="mob-controls">
-            <div className="mob-seg" role="group" aria-label="Hold length per item">
-              {[30, 90].map((s) => (
-                <button key={s} className={hold === s ? "on" : ""} onClick={() => setHold(s)}>
-                  {s}s
-                </button>
-              ))}
-            </div>
             <span className="mob-prog">
               {done.size === MOBILITY_TOTAL ? "all done ✓" : `${done.size} / ${MOBILITY_TOTAL} done`}
-              {"  ·  "}
-              <button className="mr-ghost" style={{ padding: ".1rem .3rem", fontSize: ".78rem" }} onClick={resetAll}>
-                reset
-              </button>
             </span>
+            <button className="mr-ghost" style={{ padding: ".2rem .5rem", fontSize: ".8rem" }} onClick={resetAll}>
+              reset all
+            </button>
           </div>
 
           <div className="mob-scroll">
@@ -336,8 +358,7 @@
                 {sec.items.map((item) => {
                   const key = sec.section + "::" + item;
                   const isDone = done.has(key);
-                  const isActive = activeKey === key;
-                  const chipLabel = isActive ? `${fmt(remaining)} ${running ? "⏸" : "▶"}` : `▶ ${hold}s`;
+                  const isActive = active && active.key === key;
                   return (
                     <div className="mob-row" key={key}>
                       <button
@@ -350,13 +371,26 @@
                       <button className={"mob-label" + (isDone ? " on" : "")} onClick={() => toggleDone(key)}>
                         {item}
                       </button>
-                      <button
-                        className={"mob-chip" + (isActive && running ? " run" : "")}
-                        onClick={() => onChip(key)}
-                        aria-label={isActive ? "Pause or resume timer" : "Start timer"}
-                      >
-                        {chipLabel}
-                      </button>
+                      {sec.timed && (
+                        <div className="mob-durs">
+                          {HOLDS.map((dur) => {
+                            const onThis = isActive && active.dur === dur;
+                            return (
+                              <button
+                                key={dur}
+                                className={"mob-chip" + (onThis && running ? " run" : "")}
+                                onClick={() => onDur(key, dur)}
+                                aria-label={`${dur} second hold`}
+                              >
+                                {onThis ? `${fmt(remaining)} ${running ? "⏸" : "▶"}` : `▶ ${dur}s`}
+                              </button>
+                            );
+                          })}
+                          {isActive && (
+                            <button className="mob-reset" onClick={() => onReset(key)} aria-label="Reset timer">↺</button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -367,49 +401,56 @@
       );
     }
 
-    function MorningRoutine() {
-      const [pos, setPos] = useState(0); // 0 = intro, 1..N = steps, N+1 = done
+    function Routine() {
+      const [mode, setMode] = useState("morning"); // "morning" (light) | "night" (dark)
+      const [pos, setPos] = useState(0);           // 0 = intro, 1..N = steps, N+1 = done
       const [loaded, setLoaded] = useState(false);
-      const [theme, setTheme] = useState("light");
 
+      // resolve initial mode: saved → else system dark preference
       useEffect(() => {
-        // theme: saved → else system preference
         try {
-          const saved = localStorage.getItem(THEME_KEY);
-          if (saved === "light" || saved === "dark") setTheme(saved);
-          else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) setTheme("dark");
+          const saved = localStorage.getItem(MODE_KEY);
+          if (saved === "morning" || saved === "night") setMode(saved);
+          else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) setMode("night");
         } catch (e) {}
-        // progress
+      }, []);
+
+      // load the active mode's saved progress for today whenever the mode changes
+      useEffect(() => {
+        const cap = STEPS_BY_MODE[mode].length + 1;
+        let p = 0;
         try {
-          const raw = localStorage.getItem(STORAGE_KEY);
+          const raw = localStorage.getItem(progKey(mode));
           if (raw) {
             const s = JSON.parse(raw);
-            if (s.date === todayStr() && typeof s.pos === "number") {
-              setPos(Math.max(0, Math.min(N + 1, s.pos)));
-            }
+            if (s.date === todayStr() && typeof s.pos === "number") p = Math.max(0, Math.min(cap, s.pos));
           }
-        } catch (e) {
-          /* fresh morning */
-        } finally {
-          setLoaded(true);
-        }
-      }, []);
+        } catch (e) {}
+        setPos(p);
+        setLoaded(true);
+      }, [mode]);
 
       const go = useCallback((next) => {
-        const clamped = Math.max(0, Math.min(N + 1, next));
+        const cap = STEPS_BY_MODE[mode].length + 1;
+        const clamped = Math.max(0, Math.min(cap, next));
         setPos(clamped);
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayStr(), pos: clamped }));
+          localStorage.setItem(progKey(mode), JSON.stringify({ date: todayStr(), pos: clamped }));
         } catch (e) {}
-      }, []);
+      }, [mode]);
 
-      const toggleTheme = useCallback(() => {
-        setTheme((t) => {
-          const next = t === "dark" ? "light" : "dark";
-          try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+      const toggleMode = useCallback(() => {
+        setMode((m) => {
+          const next = m === "night" ? "morning" : "night";
+          try { localStorage.setItem(MODE_KEY, next); } catch (e) {}
           return next;
         });
       }, []);
+
+      const steps = STEPS_BY_MODE[mode];
+      const N = steps.length;
+      const theme = MODE_META[mode].theme;
+      const mobilityIdx = steps.findIndex((s) => s.toLowerCase().includes("mobility training"));
 
       const g = GRADIENTS[theme];
       const frac = Math.min(1, Math.max(0, pos / (N + 1)));
@@ -430,21 +471,21 @@
       const isIntro = pos === 0;
       const isDone = pos === N + 1;
       const isStep = !isIntro && !isDone;
-      const stepIdx = pos - 1; // 0-based into STEPS
-      const isMobility = isStep && stepIdx === MOBILITY_IDX;
+      const stepIdx = pos - 1;
+      const isMobility = isStep && stepIdx === mobilityIdx;
 
       return (
         <div className="mr-root" data-theme={theme} style={rootStyle}>
           <style>{CSS}</style>
           <div className="mr-frame">
-            <button className="mr-theme" onClick={toggleTheme} aria-label="Toggle light or dark mode">
-              {theme === "dark" ? "☀" : "☾"}
+            <button className="mr-theme" onClick={toggleMode} aria-label="Switch between morning and night routine">
+              {mode === "night" ? "☀" : "☾"}
             </button>
 
             <header className="mr-top">
               {isStep && (
                 <>
-                  <div className="mr-eyebrow">Morning · step {pos} of {N}</div>
+                  <div className="mr-eyebrow">{MODE_META[mode].label} · step {pos} of {N}</div>
                   <div className="mr-track">
                     <div className="mr-fill" style={{ width: `${(pos / N) * 100}%` }} />
                   </div>
@@ -454,34 +495,21 @@
 
             <main className={"mr-main" + (isMobility ? " mob" : "")}>
               {isIntro && (
-                <div>
-                  <p className="mr-lead">Slow down.</p>
-                  <p className="mr-sub">
-                    One thing at a time. No scrolling yet — just begin.
-                  </p>
-                  <p className="mr-whisper" style={{ marginTop: "1.1rem" }}>
-                    ideally 1–1h30 after sunrise · usually 7:30–8:30 AM
-                  </p>
-                </div>
+                <button className="mr-btn mr-mantra" onClick={() => go(1)}>{MANTRA}</button>
               )}
               {isStep && !isMobility && (
-                <p className="mr-step" key={pos}>{STEPS[stepIdx]}</p>
+                <p className="mr-step" key={mode + pos}>{steps[stepIdx]}</p>
               )}
-              {isMobility && <MobilityChecklist key={pos} />}
+              {isMobility && <MobilityChecklist key={mode + pos} />}
               {isDone && (
                 <div>
                   <p className="mr-lead">That's the routine.</p>
-                  <p className="mr-sub">
-                    You're ready for the day — check off your morning routine in Todoist.
-                  </p>
+                  <p className="mr-sub">{MODE_META[mode].doneSub}</p>
                 </div>
               )}
             </main>
 
             <footer className="mr-bottom">
-              {isIntro && (
-                <button className="mr-btn" onClick={() => go(1)}>Begin</button>
-              )}
               {isStep && (
                 <>
                   <button className="mr-btn" onClick={() => go(pos + 1)}>Done</button>
@@ -491,14 +519,13 @@
               {isDone && (
                 <button className="mr-ghost" onClick={() => go(0)}>Start over</button>
               )}
-              <div className="mr-whisper">one thing at a time</div>
             </footer>
           </div>
         </div>
       );
     }
 
-    ReactDOM.createRoot(document.getElementById("root")).render(<MorningRoutine />);
+    ReactDOM.createRoot(document.getElementById("root")).render(<Routine />);
   </script>
 
   <script>

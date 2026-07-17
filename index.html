@@ -197,19 +197,20 @@
       flex:1 1 auto; min-height:0; display:flex; flex-direction:column; justify-content:center; align-items:center;
       text-align:center; padding:1.2rem 0; position:relative; overflow:hidden;
     }
-    .mr-main.panel{ justify-content:flex-start; align-items:stretch; text-align:left; padding:.6rem 0 .4rem; }
+    /* bottom padding reserves a clear zone for the fixed Done/Back buttons, so the scroll
+       area ENDS above them and text never sits behind the button. */
+    .mr-main.panel{ justify-content:flex-start; align-items:stretch; text-align:left; padding:.6rem 0 5rem; }
     .mr-step{ font-family:'Fraunces',Georgia,serif; font-weight:390; font-size:clamp(1.7rem,6.2vw,2.55rem);
       line-height:1.28; letter-spacing:-.01em; margin:0; max-width:22ch; animation:mr-rise 620ms cubic-bezier(.22,1,.36,1) both; }
     .mr-lead{ font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:clamp(1.9rem,7vw,2.7rem);
       line-height:1.15; margin:0 0 .7rem; letter-spacing:-.015em; animation:mr-rise 620ms cubic-bezier(.22,1,.36,1) both; }
     .mr-sub{ font-size:1.02rem; line-height:1.5; color:var(--sub); margin:0; max-width:30ch; animation:mr-rise 700ms cubic-bezier(.22,1,.36,1) both; }
 
-    /* opening-page line, above the morphing button — centered WITHOUT transform
-       (mr-rise ends on transform:none, which would wipe a translateX centering) */
+    /* opening-page line, above the morphing button — a plain fade-in (no rise). */
     .mr-intro-line{ position:absolute; left:1.5rem; right:1.5rem; bottom:57%; margin:0 auto; max-width:20ch;
       font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:clamp(1.3rem,5vw,1.95rem);
       line-height:1.3; color:var(--txt); text-align:center;
-      animation:mr-rise 650ms cubic-bezier(.22,1,.36,1) 220ms both; }
+      animation:mr-fadein 760ms ease 100ms both; }
     .mr-intro-line.out{ animation:mr-fadeout 300ms ease forwards; }
 
     .mr-bottom{ flex:0 0 auto; display:flex; flex-direction:column; align-items:center; gap:.85rem; min-height:1rem; }
@@ -219,18 +220,20 @@
     .mr-btn:hover{ background:var(--accentH); }
     .mr-btn:active{ transform:translateY(1px); }
 
-    /* one primary button that MORPHS: intro (centered mantra) → step (bottom "Done") */
-    .cta{ position:fixed; left:50%; z-index:4; appearance:none; border:none; cursor:pointer;
+    /* one primary button that MORPHS: intro (centered mantra) to step (bottom "Done").
+       Anchored at a constant bottom; the morph is a transform (translateY) + size props, so it
+       interpolates smoothly. Animating the bottom property between % and calc(env()) does NOT
+       animate in WebKit. On intro the button fades in at the raised position; tapping it slides to Done. */
+    .cta{ position:fixed; left:50%; bottom:calc(2.4rem + env(safe-area-inset-bottom)); z-index:4; appearance:none; border:none; cursor:pointer;
       background:var(--accent); color:var(--btnTxt); box-shadow:0 6px 18px var(--shadow); text-align:center; white-space:normal;
-      transition: bottom 640ms cubic-bezier(.5,0,.2,1), transform 640ms cubic-bezier(.5,0,.2,1),
-                  max-width 640ms cubic-bezier(.5,0,.2,1), padding 640ms cubic-bezier(.5,0,.2,1),
-                  font-size 640ms cubic-bezier(.5,0,.2,1), border-radius 640ms cubic-bezier(.5,0,.2,1), background 180ms ease; }
+      transition: transform 660ms cubic-bezier(.5,0,.2,1),
+                  max-width 660ms cubic-bezier(.5,0,.2,1), padding 660ms cubic-bezier(.5,0,.2,1),
+                  font-size 660ms cubic-bezier(.5,0,.2,1), border-radius 660ms cubic-bezier(.5,0,.2,1), background 180ms ease; }
     .cta:hover{ background:var(--accentH); }
-    .cta-intro{ bottom:44%; transform:translate(-50%,50%); font-family:'Fraunces',Georgia,serif; font-weight:400;
+    .cta-intro{ transform:translate(-50%,-40vh); font-family:'Fraunces',Georgia,serif; font-weight:400;
       font-size:clamp(1.15rem,4.7vw,1.42rem); line-height:1.35; max-width:19rem; padding:1.15rem 2.2rem; border-radius:1.7rem; }
-    .cta-intro.enter{ animation:mr-fadein 520ms ease both; }
-    /* fixed to the viewport bottom (not the frame) + safe area, so they sit low, just above the home indicator */
-    .cta-step{ bottom:calc(2.5rem + env(safe-area-inset-bottom)); transform:translate(-50%,0); font-family:inherit; font-weight:500; font-size:1.05rem;
+    .cta-intro.enter{ animation:mr-fadein 620ms ease both; }
+    .cta-step{ transform:translate(-50%,0); font-family:inherit; font-weight:500; font-size:1.05rem;
       line-height:1.2; max-width:16rem; padding:.95rem 3.4rem; border-radius:999px; }
     .cta-back{ position:fixed; left:0; right:0; bottom:calc(.35rem + env(safe-area-inset-bottom)); text-align:center; z-index:4; }
     .mr-ghost{ appearance:none; border:none; background:none; cursor:pointer; font-family:inherit; font-size:.95rem;
@@ -265,11 +268,10 @@
     .mob-body{ display:flex; flex-direction:column; min-height:0; flex:1 1 auto; animation:mr-rise 620ms cubic-bezier(.22,1,.36,1) 470ms both; }
     .mob-controls{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin:.4rem 0 .1rem; }
     .mob-prog{ font-size:.8rem; color:var(--sub); font-variant-numeric:tabular-nums; }
-    /* padding-bottom clears the floating Done + Back buttons; the tall bottom mask
-       fades scrolling text to the page bg BEHIND those buttons so nothing collides. */
-    .mob-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-top:.2rem; padding-right:.3rem; padding-bottom:8rem;
-      -webkit-mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - 6.75rem),transparent);
-              mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - 6.75rem),transparent); }
+    /* the panel main reserves the button zone, so this only needs a gentle edge fade. */
+    .mob-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-top:.2rem; padding-right:.3rem; padding-bottom:1.2rem;
+      -webkit-mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - .7rem),transparent);
+              mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - .7rem),transparent); }
     .mob-section{ font-family:'Fraunces',Georgia,serif; font-size:.95rem; font-weight:500; color:var(--sub); margin:.85rem 0 .1rem; letter-spacing:.01em; }
     .mob-item{ padding:.55rem 0; border-bottom:1px solid var(--rowBorder); }
     .mob-line{ display:flex; align-items:center; gap:.7rem; }

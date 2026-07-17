@@ -238,6 +238,12 @@
     .cta-step{ transform:translate(-50%,0); width:11rem; font-family:inherit; font-weight:500; font-size:1.05rem;
       line-height:1.2; padding:.95rem 1rem; border-radius:999px; }
     .cta-back{ position:fixed; left:0; right:0; bottom:calc(.35rem + env(safe-area-inset-bottom)); text-align:center; z-index:4; }
+    /* Standalone PWA: the fixed containing block already sits above the home-indicator inset, so
+       adding env() again double-counts and floats the buttons ~34px too high. Drop it here → sits low. */
+    @media (display-mode: standalone){
+      .cta{ bottom:2.3rem; }
+      .cta-back{ bottom:.3rem; }
+    }
     .mr-ghost{ appearance:none; border:none; background:none; cursor:pointer; font-family:inherit; font-size:.95rem;
       color:var(--ghost); padding:.5rem .9rem; border-radius:999px; transition:color 160ms ease; }
     .mr-ghost:hover{ color:var(--txt); }

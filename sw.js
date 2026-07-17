@@ -1,6 +1,6 @@
 // Morning Routine service worker — offline support.
 // Bump CACHE when the app shell changes to force an update.
-const CACHE = "routine-v14";
+const CACHE = "routine-v15";
 
 // Same-origin app shell — precached on install so the app opens offline.
 const SHELL = [

@@ -72,7 +72,7 @@
       PSYCHO_STEP,
       "Meditate",
       "Briefly clean room",
-      "Walk, joint rollout (≈5m)",
+      "Walk and joint rollout",
       "Do mobility training (≈20m)",
       "Do neck training",
       "Do isometric pull-up hold (left biceps — underhand grip, ≈30–45s, a few rounds)",
@@ -102,9 +102,12 @@
     const MODE_META = { morning: { label: "Morning", theme: "light" }, night: { label: "Night", theme: "dark" } };
 
     // ── Mobility circuit ──
-    const MOBILITY = [
+    // Rollouts + Dynamic movements live on the "Walk and joint rollout" step; Stretches on "Do mobility training".
+    const ROLLOUT_CIRCUIT = [
       { section: "Rollouts", timed: false, items: ["Shoulders", "Neck", "Upper torso", "Hips", "Knees", "Ankles"] },
       { section: "Dynamic movements", timed: false, items: ["Jumps", "Lunges", "High knees", "Leg swings", "90-90 rotations", "Hip CARs"] },
+    ];
+    const MOBILITY = [
       { section: "Stretches", timed: true, items: [
         { name: "Elephant walk", sides: false },
         { name: "Half kneeling stretch back and forth", sides: true },
@@ -117,7 +120,7 @@
     ];
     const itemName = (it) => (typeof it === "object" ? it.name : it);
     const itemSides = (it) => (typeof it === "object" ? !!it.sides : false);
-    const MOBILITY_TOTAL = MOBILITY.reduce((n, s) => n + s.items.reduce((m, it) => m + (itemSides(it) ? 2 : 1), 0), 0);
+    const sectionsTotal = (secs) => secs.reduce((n, s) => n + s.items.reduce((m, it) => m + (itemSides(it) ? 2 : 1), 0), 0);
     const HOLDS = [35, 95];
 
     // opening button label per mode: morning = mantra, night = a gentle "Relax"
@@ -140,10 +143,6 @@
       if (t.includes("to-do")) return { href: DEEPLINKS.todoist, label: "Open Todoist ↗" };
       return null;
     }
-    const hasStepTimer = (text) => {
-      const t = text.toLowerCase();
-      return t.includes("meditate") || t.includes("joint rollout");
-    };
 
     // The routine "day" rolls over at 1 PM: progress from the morning persists until then,
     // and each new morning starts fresh. (Shifting the clock back RESET_HOUR hours makes the
@@ -251,6 +250,7 @@
     @media (display-mode: standalone){
       .cta{ bottom:2.6rem; }
       .cta-back{ bottom:.15rem; }
+      .done-actions{ bottom:.6rem; }
     }
     .mr-ghost{ appearance:none; border:none; background:none; cursor:pointer; font-family:inherit; font-size:.95rem;
       color:var(--ghost); padding:.5rem .9rem; border-radius:999px; transition:color 160ms ease; }
@@ -271,16 +271,16 @@
     .step-time{ font-family:'Fraunces',Georgia,serif; font-size:clamp(2.8rem,13vw,3.8rem); font-variant-numeric:tabular-nums;
       color:var(--txt); line-height:1; }
     .step-time.ring{ animation:mob-pulse 1s ease-in-out infinite; }
+    .step-time-btn{ appearance:none; border:none; background:none; padding:0; cursor:default; }
+    .step-time-btn.tappable{ cursor:pointer; border-bottom:2px dotted var(--track); }
+    .step-time-input{ appearance:none; background:none; border:none; border-bottom:2px solid var(--accent); padding:0;
+      width:5.2ch; text-align:center; color:var(--txt); outline:none; }
     /* duration chevrons — fade away once the timer is running */
     .med-chev{ appearance:none; border:none; background:none; cursor:pointer; color:var(--accent); font-size:2.2rem; line-height:1;
       padding:.2rem .5rem; border-radius:999px; transition:opacity 300ms ease, color 140ms ease; }
     .med-chev:disabled{ color:var(--track); cursor:default; }
     .med-chev.gone{ opacity:0; pointer-events:none; }
-    .med-custom{ display:flex; align-items:center; justify-content:center; gap:.7rem; margin-top:-.2rem; animation:mr-fadein 300ms ease both; }
-    .med-custom-lbl{ font-size:.9rem; color:var(--sub); font-variant-numeric:tabular-nums; min-width:8.5rem; text-align:center; }
-    .med-step{ appearance:none; border:1.5px solid var(--rowBorder); background:none; cursor:pointer; color:var(--txt);
-      width:2rem; height:2rem; border-radius:999px; font-size:1.15rem; line-height:1; display:flex; align-items:center; justify-content:center; }
-    .med-step:active{ background:var(--track); }
+    .med-hint{ font-size:.82rem; color:var(--sub); margin-top:-.35rem; }
     .step-timer-btns{ display:flex; align-items:center; gap:.6rem; }
     .step-go{ min-width:9rem; font-size:1rem; padding:.8rem 2rem; }
     .step-go.stop{ animation:mob-pulse 1s ease-in-out infinite; }
@@ -296,9 +296,10 @@
     .mob-controls{ display:flex; align-items:center; justify-content:space-between; gap:.6rem; margin:.4rem 0 .1rem; }
     .mob-prog{ font-size:.8rem; color:var(--sub); font-variant-numeric:tabular-nums; }
     /* the panel main reserves the button zone, so this only needs a gentle edge fade. */
-    .mob-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-top:.2rem; padding-right:.3rem; padding-bottom:1.2rem;
+    .mob-scroll{ flex:1 1 auto; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; margin-top:.2rem; padding-bottom:1.2rem; scrollbar-width:none;
       -webkit-mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - .7rem),transparent);
               mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - .7rem),transparent); }
+    .mob-scroll::-webkit-scrollbar{ display:none; }
     .mob-section{ font-family:'Fraunces',Georgia,serif; font-size:.95rem; font-weight:500; color:var(--sub); margin:.85rem 0 .1rem; letter-spacing:.01em; }
     .mob-item{ padding:.55rem 0; border-bottom:1px solid var(--rowBorder); }
     .mob-line{ display:flex; align-items:center; gap:.7rem; }
@@ -328,22 +329,27 @@
 
     /* ── Done-screen outdoors scene (full-screen) ── */
     .done-restart{ min-width:auto; padding:.9rem 2.4rem; }
-    /* a frosted card so the buttons stay legible over the dark hills at the bottom of the scene */
-    .done-actions{ position:fixed; left:50%; transform:translateX(-50%); bottom:calc(1.4rem + env(safe-area-inset-bottom));
-      width:max-content; max-width:90%; padding:1rem 1.5rem 1.1rem; border-radius:1.6rem;
-      background:rgba(16,34,29,.34); -webkit-backdrop-filter:blur(7px); backdrop-filter:blur(7px);
-      display:flex; flex-direction:column; align-items:center; gap:.5rem; z-index:3; animation:mr-fadein 800ms ease both; }
+    /* buttons low over the hills, on a frosted card so they stay legible against the dark green */
+    .done-actions{ position:fixed; left:50%; transform:translateX(-50%); bottom:calc(.9rem + env(safe-area-inset-bottom));
+      width:max-content; max-width:90%; padding:.9rem 1.4rem 1rem; border-radius:1.5rem;
+      background:rgba(16,34,29,.30); -webkit-backdrop-filter:blur(9px); backdrop-filter:blur(9px);
+      display:flex; flex-direction:column; align-items:center; gap:.4rem; z-index:4; animation:mr-fadein 800ms ease both; }
     .done-back{ color:rgba(255,255,255,.92); }
-    /* per-step time breakdown on the done screen — fills between the header and the buttons, scrolls */
-    .done-summary{ position:fixed; z-index:3; left:0; right:0; margin:0 auto; max-width:26rem;
-      top:calc(2.2rem + env(safe-area-inset-top)); bottom:calc(8.5rem + env(safe-area-inset-bottom));
-      padding:0 1.6rem; display:flex; flex-direction:column; animation:mr-fadein 800ms ease both; }
-    .done-total{ font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:clamp(2.6rem,12vw,3.6rem);
+    /* per-step time breakdown — a translucent "liquid glass" card over the day's scene */
+    .done-summary{ position:fixed; z-index:3; left:.9rem; right:.9rem; margin:0 auto; max-width:25rem;
+      top:calc(2rem + env(safe-area-inset-top)); bottom:calc(7rem + env(safe-area-inset-bottom));
+      padding:1.3rem 1.4rem .3rem; display:flex; flex-direction:column; border-radius:1.7rem;
+      background:rgba(255,255,255,.12); -webkit-backdrop-filter:blur(18px) saturate(1.4); backdrop-filter:blur(18px) saturate(1.4);
+      border:1px solid rgba(255,255,255,.22); box-shadow:0 10px 34px rgba(16,34,29,.14); animation:mr-fadein 800ms ease both; }
+    .mr-root[data-theme="dark"] .done-summary{ background:rgba(20,32,40,.24); border-color:rgba(255,255,255,.14); }
+    .done-total{ font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:clamp(2.4rem,11vw,3.4rem);
       text-align:center; color:var(--txt); line-height:1; font-variant-numeric:tabular-nums; }
-    .done-total-cap{ text-align:center; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--sub); margin:.45rem 0 1.1rem; }
-    .done-breakdown{ list-style:none; margin:0; padding:0 .1rem; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
-      -webkit-mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - .7rem),transparent);
-              mask-image:linear-gradient(180deg,transparent,#000 .7rem,#000 calc(100% - .7rem),transparent); }
+    .done-total-cap{ text-align:center; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--sub); margin:.4rem 0 1rem; }
+    .done-breakdown{ list-style:none; margin:0; padding:0; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+      scrollbar-width:none;
+      -webkit-mask-image:linear-gradient(180deg,transparent,#000 .6rem,#000 calc(100% - .6rem),transparent);
+              mask-image:linear-gradient(180deg,transparent,#000 .6rem,#000 calc(100% - .6rem),transparent); }
+    .done-breakdown::-webkit-scrollbar{ display:none; }
     .done-breakdown li{ display:flex; align-items:baseline; justify-content:space-between; gap:1rem;
       padding:.5rem 0; border-bottom:1px solid var(--rowBorder); }
     .db-name{ color:var(--txt); font-size:.92rem; line-height:1.3; }
@@ -352,7 +358,9 @@
        so the home-indicator strip shows scene, not the body's flat color. */
     /* extend below the viewport bottom by the safe-area inset so the standalone PWA's
        home-indicator strip is covered by the scene (it shows page bg otherwise). */
-    .scene{ position:fixed; top:0; left:0; right:0; bottom:calc(-1 * env(safe-area-inset-bottom)); overflow:hidden; z-index:0; pointer-events:none; animation:scene-in 900ms ease both; }
+    /* overshoot the bottom by a fixed amount + the inset so the hills fill the standalone PWA's
+       home-indicator strip even when env() reports 0 there. */
+    .scene{ position:fixed; top:0; left:0; right:0; bottom:calc(-2rem - env(safe-area-inset-bottom)); overflow:hidden; z-index:0; pointer-events:none; animation:scene-in 900ms ease both; }
     .scene .sun-glow{ position:absolute; top:13%; left:50%; width:12rem; height:12rem; margin-left:-6rem; border-radius:50%;
       background:radial-gradient(circle, rgba(243,178,95,.4), transparent 68%); animation:glow-pulse 6s ease-in-out infinite; }
     .scene .sun{ position:absolute; top:16%; left:50%; width:5.4rem; height:5.4rem; margin-left:-2.7rem; border-radius:50%;
@@ -481,11 +489,11 @@
     // Timer with an optional duration picker: chevrons cycle presets (and an extra "custom" slot),
     // and fade out once the timer is running.
     function StepTimer({ presets = [5], custom = false }) {
-      const opts = custom ? presets.concat(["custom"]) : presets;
       const [sel, setSel] = useState(() => { const i = presets.indexOf(5); return i >= 0 ? i : 0; });
-      const [customMin, setCustomMin] = useState(15);
-      const chosenMin = opts[sel] === "custom" ? customMin : opts[sel];
-      const seconds = Math.max(1, chosenMin) * 60;
+      const [customSec, setCustomSec] = useState(null);  // non-null → a tapped-in custom time overrides the preset
+      const [editing, setEditing] = useState(false);
+      const [draft, setDraft] = useState("");
+      const seconds = customSec != null ? customSec : Math.max(1, presets[sel]) * 60;
       const [remaining, setRemaining] = useState(seconds);
       const [running, setRunning] = useState(false);
       const [alarming, setAlarming] = useState(false);
@@ -507,8 +515,8 @@
       }, [alarming, chime]);
 
       const idle = !running && !alarming && remaining === seconds;
-      const selectable = opts.length > 1;
-      const isCustom = opts[sel] === "custom";
+      const selectable = presets.length > 1;
+      const isCustom = customSec != null;
       const primary = () => {
         unlock();
         if (alarming) { setAlarming(false); setRemaining(seconds); return; }
@@ -517,27 +525,42 @@
       };
       const reset = () => { setAlarming(false); setRunning(false); setRemaining(seconds); };
       const label = alarming ? "⏹ Stop" : running ? "Pause" : remaining < seconds ? "Resume" : "Start";
+      // a chevron tap in custom mode drops back to the presets; otherwise it moves between presets
+      const chev = (delta) => {
+        if (isCustom) { setCustomSec(null); return; }
+        setSel((s) => Math.max(0, Math.min(presets.length - 1, s + delta)));
+      };
+      const startEdit = () => { if (custom && idle) { setDraft(String(Math.max(1, Math.round(seconds / 60)))); setEditing(true); } };
+      const commitDraft = () => {
+        // numeric keypad has no colon: "20" → 20 min, "2030" → 20:30, and "mm:ss" if pasted
+        const s = draft.trim(); let sec = null, m;
+        if ((m = s.match(/^(\d{1,3}):([0-5]?\d)$/))) sec = (+m[1]) * 60 + (+m[2]);
+        else if (/^\d+$/.test(s)) sec = s.length <= 2 ? (+s) * 60 : (+s.slice(0, -2)) * 60 + Math.min(59, +s.slice(-2));
+        if (sec != null && sec > 0) setCustomSec(Math.min(sec, 180 * 60));
+        setEditing(false);
+      };
 
       return (
         <div className="step-timer">
           <div className="step-time-row">
             {selectable && (
-              <button className={"med-chev" + (idle ? "" : " gone")} onClick={() => setSel((s) => Math.max(0, s - 1))}
-                disabled={!idle || sel === 0} aria-label="shorter">‹</button>
+              <button className={"med-chev" + (idle ? "" : " gone")} onClick={() => chev(-1)}
+                disabled={!idle || (!isCustom && sel === 0)} aria-label="shorter">‹</button>
             )}
-            <div className={"step-time" + (alarming ? " ring" : "")}>{fmt(remaining)}</div>
+            {editing ? (
+              <input className="step-time step-time-input" autoFocus inputMode="numeric" size={5} value={draft}
+                onChange={(e) => setDraft(e.target.value)} onBlur={commitDraft}
+                onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); }} aria-label="custom time (mm:ss)" />
+            ) : (
+              <button className={"step-time step-time-btn" + (custom && idle ? " tappable" : "") + (alarming ? " ring" : "")}
+                onClick={startEdit}>{fmt(remaining)}</button>
+            )}
             {selectable && (
-              <button className={"med-chev" + (idle ? "" : " gone")} onClick={() => setSel((s) => Math.min(opts.length - 1, s + 1))}
-                disabled={!idle || sel === opts.length - 1} aria-label="longer">›</button>
+              <button className={"med-chev" + (idle ? "" : " gone")} onClick={() => chev(1)}
+                disabled={!idle || (!isCustom && sel === presets.length - 1)} aria-label="longer">›</button>
             )}
           </div>
-          {isCustom && idle && (
-            <div className="med-custom">
-              <button className="med-step" onClick={() => setCustomMin((m) => Math.max(1, m - 1))} aria-label="one minute less">−</button>
-              <span className="med-custom-lbl">custom · {customMin} min</span>
-              <button className="med-step" onClick={() => setCustomMin((m) => Math.min(180, m + 1))} aria-label="one minute more">+</button>
-            </div>
-          )}
+          {custom && idle && <div className="med-hint">{isCustom ? "custom · tap the time to change it" : "tap the time to set a custom length"}</div>}
           <div className="step-timer-btns">
             <button className={"mr-btn step-go" + (alarming ? " stop" : "")} onClick={primary}>{label}</button>
             {!alarming && (running || remaining < seconds) && <button className="mob-reset" onClick={reset} aria-label="Reset timer">↺</button>}
@@ -546,7 +569,8 @@
       );
     }
 
-    function MobilityChecklist() {
+    function MobilityChecklist({ sections = MOBILITY, title = "Mobility training", footer = null }) {
+      const total = sectionsTotal(sections);
       const [done, setDone] = useState(() => new Set());
       const [active, setActive] = useState(null); // { key, dur }
       const [running, setRunning] = useState(false);
@@ -610,14 +634,14 @@
 
       return (
         <div className="mob-wrap">
-          <p className="mob-head">Mobility training</p>
+          <p className="mob-head">{title}</p>
           <div className="mob-body">
             <div className="mob-controls">
-              <span className="mob-prog">{done.size === MOBILITY_TOTAL ? "all done ✓" : `${done.size} / ${MOBILITY_TOTAL} done`}</span>
+              <span className="mob-prog">{done.size === total ? "all done ✓" : `${done.size} / ${total} done`}</span>
               <button className="mr-ghost" style={{ padding: ".2rem .5rem", fontSize: ".8rem" }} onClick={resetAll}>reset all</button>
             </div>
             <div className="mob-scroll">
-              {MOBILITY.map((sec) => (
+              {sections.map((sec) => (
                 <div key={sec.section}>
                   <div className="mob-section">{sec.section}</div>
                   {sec.items.map((it) => {
@@ -662,6 +686,7 @@
                 </div>
               ))}
             </div>
+            {footer}
           </div>
         </div>
       );
@@ -824,9 +849,10 @@
       const stepText = isStep ? steps[stepIdx] : "";
       const isPsycho = isStep && stepText === PSYCHO_STEP;
       const isMobility = isStep && stepText.toLowerCase().includes("mobility training");
-      const isPanel = isPsycho || isMobility;
+      const isWalk = isStep && stepText.toLowerCase().includes("joint rollout");
+      const isMeditate = isStep && stepText.toLowerCase().includes("meditate");
+      const isPanel = isPsycho || isMobility || isWalk;
       const link = isStep ? stepLink(stepText) : null;
-      const timed = isStep && hasStepTimer(stepText);
 
       return (
         <div className="mr-root" data-theme={theme} style={rootStyle}>
@@ -857,13 +883,13 @@
 
             <main className={"mr-main" + (isPanel ? " panel" : "")}>
               {isPsycho && <PsychoReview key={mode + pos} />}
-              {isMobility && <MobilityChecklist key={mode + pos} />}
+              {isMobility && <MobilityChecklist key={mode + pos} sections={MOBILITY} title="Mobility training" />}
+              {isWalk && <MobilityChecklist key={mode + pos} sections={ROLLOUT_CIRCUIT} title="Walk and joint rollout"
+                footer={<StepTimer presets={[5]} />} />}
               {isStep && !isPanel && (
                 <div className="mr-stepwrap" key={mode + pos}>
                   <p className="mr-step">{stepText}</p>
-                  {timed && (stepText.toLowerCase().includes("meditate")
-                    ? <StepTimer presets={[1, 5, 10]} custom={true} />
-                    : <StepTimer presets={[5]} />)}
+                  {isMeditate && <StepTimer presets={[1, 5, 10]} custom={true} />}
                   {link && <a className="mr-link" href={link.href}>{link.label}</a>}
                 </div>
               )}

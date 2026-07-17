@@ -224,17 +224,19 @@
        Anchored at a constant bottom; the morph is a transform (translateY) + size props, so it
        interpolates smoothly. Animating the bottom property between % and calc(env()) does NOT
        animate in WebKit. On intro the button fades in at the raised position; tapping it slides to Done. */
-    .cta{ position:fixed; left:50%; bottom:calc(2.4rem + env(safe-area-inset-bottom)); z-index:4; appearance:none; border:none; cursor:pointer;
-      background:var(--accent); color:var(--btnTxt); box-shadow:0 6px 18px var(--shadow); text-align:center; white-space:normal;
-      transition: transform 660ms cubic-bezier(.5,0,.2,1),
-                  max-width 660ms cubic-bezier(.5,0,.2,1), padding 660ms cubic-bezier(.5,0,.2,1),
-                  font-size 660ms cubic-bezier(.5,0,.2,1), border-radius 660ms cubic-bezier(.5,0,.2,1), background 180ms ease; }
+    .cta{ position:fixed; left:50%; bottom:calc(1.5rem + env(safe-area-inset-bottom)); z-index:4; appearance:none; border:none; cursor:pointer;
+      box-sizing:border-box; background:var(--accent); color:var(--btnTxt); box-shadow:0 6px 18px var(--shadow); text-align:center; white-space:normal;
+      transition: transform 660ms cubic-bezier(.5,0,.2,1), width 660ms cubic-bezier(.5,0,.2,1),
+                  padding 660ms cubic-bezier(.5,0,.2,1), font-size 660ms cubic-bezier(.5,0,.2,1),
+                  border-radius 660ms cubic-bezier(.5,0,.2,1), background 180ms ease; }
     .cta:hover{ background:var(--accentH); }
-    .cta-intro{ transform:translate(-50%,-31dvh); font-family:'Fraunces',Georgia,serif; font-weight:400;
-      font-size:clamp(1.15rem,4.7vw,1.42rem); line-height:1.35; max-width:19rem; padding:1.15rem 2.2rem; border-radius:1.7rem; }
+    /* fixed widths (border-box) + constant left:50%/translateX(-50%) → the morph is a pure
+       width+transform interpolation and the horizontal center never shifts (no end snap). */
+    .cta-intro{ transform:translate(-50%,-31dvh); width:17rem; font-family:'Fraunces',Georgia,serif; font-weight:400;
+      font-size:clamp(1.15rem,4.7vw,1.42rem); line-height:1.35; padding:1.3rem 1.4rem; border-radius:1.7rem; }
     .cta-intro.enter{ animation:mr-fadein 620ms ease both; }
-    .cta-step{ transform:translate(-50%,0); font-family:inherit; font-weight:500; font-size:1.05rem;
-      line-height:1.2; max-width:16rem; padding:.95rem 3.4rem; border-radius:999px; }
+    .cta-step{ transform:translate(-50%,0); width:11rem; font-family:inherit; font-weight:500; font-size:1.05rem;
+      line-height:1.2; padding:.95rem 1rem; border-radius:999px; }
     .cta-back{ position:fixed; left:0; right:0; bottom:calc(.35rem + env(safe-area-inset-bottom)); text-align:center; z-index:4; }
     .mr-ghost{ appearance:none; border:none; background:none; cursor:pointer; font-family:inherit; font-size:.95rem;
       color:var(--ghost); padding:.5rem .9rem; border-radius:999px; transition:color 160ms ease; }
@@ -289,10 +291,9 @@
       padding:.4rem .7rem; border-radius:999px; background:var(--chipBg); color:var(--chipTxt); min-width:3.6rem; text-align:center;
       transition:background 140ms ease, color 140ms ease; }
     .mob-chip.run{ background:var(--accent); color:var(--btnTxt); }
+    .mob-chip.stop{ background:var(--accent); color:var(--btnTxt); animation:mob-pulse 1s ease-in-out infinite; }
     .mob-reset{ appearance:none; border:none; background:none; cursor:pointer; color:var(--sub); font-size:1.15rem; line-height:1; padding:.2rem .35rem; border-radius:6px; transition:color 140ms ease; }
     .mob-reset:hover{ color:var(--txt); }
-    .mob-stop{ appearance:none; border:none; cursor:pointer; font:inherit; font-size:.82rem; font-weight:500; padding:.4rem .9rem;
-      border-radius:999px; background:var(--accent); color:var(--btnTxt); animation:mob-pulse 1s ease-in-out infinite; }
 
     /* psychohabitual nested list */
     .ph-list{ margin:0; padding-left:1.15rem; }
@@ -306,7 +307,9 @@
       display:flex; flex-direction:column; align-items:center; gap:.9rem; z-index:3; animation:mr-fadein 800ms ease both; }
     /* inset:0 fills the whole fixed viewport INCLUDING the safe areas (viewport-fit=cover),
        so the home-indicator strip shows scene, not the body's flat color. */
-    .scene{ position:fixed; inset:0; overflow:hidden; z-index:0; pointer-events:none; animation:scene-in 900ms ease both; }
+    /* extend below the viewport bottom by the safe-area inset so the standalone PWA's
+       home-indicator strip is covered by the scene (it shows page bg otherwise). */
+    .scene{ position:fixed; top:0; left:0; right:0; bottom:calc(-1 * env(safe-area-inset-bottom)); overflow:hidden; z-index:0; pointer-events:none; animation:scene-in 900ms ease both; }
     .scene .sun-glow{ position:absolute; top:13%; left:50%; width:12rem; height:12rem; margin-left:-6rem; border-radius:50%;
       background:radial-gradient(circle, rgba(243,178,95,.4), transparent 68%); animation:glow-pulse 6s ease-in-out infinite; }
     .scene .sun{ position:absolute; top:16%; left:50%; width:5.4rem; height:5.4rem; margin-left:-2.7rem; border-radius:50%;
@@ -358,7 +361,7 @@
     @media (prefers-reduced-motion: reduce){
       .mr-root,.mr-fill,.mr-btn,.mr-theme,.cta{ transition:none; }
       .mr-step,.mr-lead,.mr-sub,.mr-intro-line,.cta-intro,.mob-head,.mob-body,.mr-link,.step-timer{ animation:none; }
-      .mob-stop,.step-go.stop,.step-time.ring,.scene,.scene *{ animation:none; }
+      .mob-chip.stop,.step-go.stop,.step-time.ring,.scene,.scene *{ animation:none; }
     }
     `;
 
@@ -485,7 +488,7 @@
         return () => clearInterval(id);
       }, [running, active]);
       useEffect(() => {
-        if (running && active && remaining === 0) { setAlarming(active.key); setRunning(false); setActive(null); }
+        if (running && active && remaining === 0) { setAlarming({ key: active.key, dur: active.dur }); setRunning(false); setActive(null); }
       }, [remaining, running, active]);
       useEffect(() => {
         if (!alarming) return;
@@ -496,19 +499,19 @@
 
       const onDur = useCallback((key, dur) => {
         unlock();
-        setAlarming((a) => (a === key ? null : a));
+        setAlarming((a) => (a && a.key === key ? null : a));
         setActive((cur) => {
           if (cur && cur.key === key && cur.dur === dur) { setRunning((r) => !r); return cur; }
           setRemaining(dur); setRunning(true); return { key, dur };
         });
       }, [unlock]);
       const onReset = useCallback((key) => {
-        setAlarming((a) => (a === key ? null : a));
+        setAlarming((a) => (a && a.key === key ? null : a));
         setActive((cur) => { if (cur && cur.key === key) { setRunning(false); setRemaining(0); return null; } return cur; });
       }, []);
       // Stop the ring AND auto-check the next side (right → left).
       const onStop = useCallback((key, sides) => {
-        setAlarming((a) => (a === key ? null : a));
+        setAlarming((a) => (a && a.key === key ? null : a));
         setDone((d) => {
           const n = new Set(d);
           if (sides) { const R = key + "::R", L = key + "::L"; if (!n.has(R)) n.add(R); else n.add(L); }
@@ -549,7 +552,7 @@
                     const name = itemName(it), sides = itemSides(it);
                     const key = sec.section + "::" + name;
                     const isActive = active && active.key === key;
-                    const isAlarming = alarming === key;
+                    const isAlarming = alarming && alarming.key === key;
                     return (
                       <div className="mob-item" key={key}>
                         <div className="mob-line">
@@ -565,15 +568,20 @@
                           <div className="mob-timer">
                             {HOLDS.map((dur) => {
                               const onThis = isActive && active.dur === dur;
+                              const thisAlarming = isAlarming && alarming.dur === dur;
+                              // play/pause icon always on the LEFT so it never jumps sides;
+                              // the running chip itself becomes ⏹ Stop when the timer ends.
+                              const label = thisAlarming ? "⏹ Stop"
+                                : onThis ? `${running ? "⏸" : "▶"} ${fmt(remaining)}`
+                                : `▶ ${dur}s`;
                               return (
-                                <button key={dur} className={"mob-chip" + (onThis && running ? " run" : "")}
-                                  onClick={() => onDur(key, dur)} aria-label={`${dur} second hold`}>
-                                  {onThis ? `${fmt(remaining)} ${running ? "⏸" : "▶"}` : `▶ ${dur}s`}
+                                <button key={dur} className={"mob-chip" + (thisAlarming ? " stop" : (onThis && running ? " run" : ""))}
+                                  onClick={() => (thisAlarming ? onStop(key, sides) : onDur(key, dur))} aria-label={`${dur} second hold`}>
+                                  {label}
                                 </button>
                               );
                             })}
                             {isActive && <button className="mob-reset" onClick={() => onReset(key)} aria-label="Reset timer">↺</button>}
-                            {isAlarming && <button className="mob-stop" onClick={() => onStop(key, sides)}>⏹ Stop</button>}
                           </div>
                         )}
                       </div>
@@ -686,18 +694,19 @@
       const bottomColor = lerpHex(g.COOL_BOT, g.WARM_BOT, frac);
       const rootStyle = { background: `linear-gradient(180deg, ${topColor} 0%, ${bottomColor} 100%)` };
 
-      // Match the OS status-bar / safe-area color to the app edge the bar sits against:
-      // the gradient's bottom normally, or the hills' green on the final scene screen.
-      // On the done screen the scene (inset:0, opaque hills) covers everything, so match the
-      // status-bar/chrome tint to the SKY at the top, not the hills — a green bar clashed with the cream sky.
+      // Status-bar/chrome TINT (theme-color): sky at top of the done scene, gradient bottom elsewhere.
       const barColor = pos === N + 1 ? topColor : bottomColor;
+      // BODY background fills any area the fixed content doesn't cover — notably the standalone PWA's
+      // bottom home-indicator strip. On the done screen that edge is hills, so fill it with the front hill.
+      const HILL3 = { light: "#2C5A50", dark: "#1B322D" };
+      const bodyBg = pos === N + 1 ? HILL3[theme] : bottomColor;
       useEffect(() => {
         try {
-          document.body.style.background = barColor;
+          document.body.style.background = bodyBg;
           const m = document.querySelector('meta[name="theme-color"]');
           if (m) m.setAttribute("content", barColor);
         } catch (e) {}
-      }, [barColor]);
+      }, [bodyBg, barColor]);
 
       if (!loaded) return <div className="mr-root" data-theme={theme} style={rootStyle}><style>{CSS}</style></div>;
 

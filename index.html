@@ -153,7 +153,7 @@
       d.setHours(d.getHours() - RESET_HOUR);
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }
-    function fmt(sec) { return `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`; }
+    function fmt(sec) { const s = Math.max(0, Math.floor(sec)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
     function lerpHex(a, b, t) {
       const p = (h, i) => parseInt(h.replace("#", "").slice(i, i + 2), 16);
       const mix = (i) => Math.round(p(a, i) + (p(b, i) - p(a, i)) * t);
@@ -485,6 +485,53 @@
       }, []);
     }
 
+    // Wall-clock countdown shared by the step timers. Instead of decrementing a tick each second,
+    // it tracks a real end-timestamp and derives `remaining` from Date.now(), so it stays accurate
+    // when the tab is backgrounded/suspended (mobile Safari throttles or freezes intervals): on
+    // return we recompute and fire the expiry if it already elapsed. The interval only drives the
+    // on-screen refresh — losing ticks in the background no longer loses time.
+    function useCountdown(onExpire, initial = 0) {
+      const [remaining, setRemaining] = useState(initial);
+      const [running, setRunning] = useState(false);
+      const endRef = useRef(null);            // ms deadline while running; null when paused/idle
+      const onExpireRef = useRef(onExpire);
+      onExpireRef.current = onExpire;
+
+      const sync = useCallback(() => {
+        if (endRef.current == null) return;
+        const r = Math.max(0, Math.round((endRef.current - Date.now()) / 1000));
+        setRemaining(r);
+        if (r <= 0) { endRef.current = null; setRunning(false); if (onExpireRef.current) onExpireRef.current(); }
+      }, []);
+
+      useEffect(() => {
+        if (!running) return;
+        sync();
+        const id = setInterval(sync, 500);
+        const onVis = () => { if (document.visibilityState === "visible") sync(); };
+        document.addEventListener("visibilitychange", onVis);
+        window.addEventListener("focus", onVis);
+        return () => {
+          clearInterval(id);
+          document.removeEventListener("visibilitychange", onVis);
+          window.removeEventListener("focus", onVis);
+        };
+      }, [running, sync]);
+
+      const start = useCallback((secs) => { endRef.current = Date.now() + secs * 1000; setRemaining(secs); setRunning(true); }, []);
+      const pause = useCallback(() => {
+        if (endRef.current == null) return;
+        const r = Math.max(0, Math.round((endRef.current - Date.now()) / 1000));
+        endRef.current = null; setRemaining(r); setRunning(false);
+      }, []);
+      const resume = useCallback(() => {
+        setRemaining((r) => { if (r > 0) { endRef.current = Date.now() + r * 1000; setRunning(true); } return r; });
+      }, []);
+      const reset = useCallback((secs) => { endRef.current = null; setRunning(false); setRemaining(secs != null ? secs : 0); }, []);
+
+      return { remaining, running, start, pause, resume, reset };
+    }
+
     // Timer with an optional duration picker: chevrons cycle presets (and an extra "custom" slot),
     // and fade out once the timer is running.
     function StepTimer({ presets = [5], custom = false }) {
@@ -493,19 +540,12 @@
       const [editing, setEditing] = useState(false);
       const [draft, setDraft] = useState("");
       const seconds = customSec != null ? customSec : Math.max(1, presets[sel]) * 60;
-      const [remaining, setRemaining] = useState(seconds);
-      const [running, setRunning] = useState(false);
       const [alarming, setAlarming] = useState(false);
       const { unlock, chime } = useAudio();
+      const { remaining, running, start, pause, resume, reset: resetTimer } = useCountdown(() => setAlarming(true), seconds);
 
       // while idle, keep the countdown synced to the chosen duration
-      useEffect(() => { if (!running && !alarming) setRemaining(seconds); }, [seconds, running, alarming]);
-      useEffect(() => {
-        if (!running) return;
-        const id = setInterval(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
-        return () => clearInterval(id);
-      }, [running]);
-      useEffect(() => { if (running && remaining === 0) { setRunning(false); setAlarming(true); } }, [running, remaining]);
+      useEffect(() => { if (!running && !alarming) resetTimer(seconds); }, [seconds, running, alarming, resetTimer]);
       useEffect(() => {
         if (!alarming) return;
         chime(); let n = 0;
@@ -518,12 +558,13 @@
       const isCustom = customSec != null;
       const primary = () => {
         unlock();
-        if (alarming) { setAlarming(false); setRemaining(seconds); return; }
-        if (remaining === 0) setRemaining(seconds);
-        setRunning((r) => !r);
+        if (alarming) { setAlarming(false); resetTimer(seconds); return; }
+        if (running) { pause(); return; }
+        if (remaining > 0 && remaining < seconds) { resume(); return; }
+        start(seconds);
       };
-      const reset = () => { setAlarming(false); setRunning(false); setRemaining(seconds); };
-      const label = alarming ? "⏹ Stop" : running ? "Pause" : remaining < seconds ? "Resume" : "Start";
+      const reset = () => { setAlarming(false); resetTimer(seconds); };
+      const label = alarming ? "⏹ Stop" : running ? "Pause" : (remaining > 0 && remaining < seconds) ? "Resume" : "Start";
       // a chevron tap in custom mode drops back to the presets; otherwise it moves between presets
       const chev = (delta) => {
         if (isCustom) { setCustomSec(null); return; }
@@ -571,19 +612,16 @@
       const total = sectionsTotal(sections);
       const [done, setDone] = useState(() => new Set());
       const [active, setActive] = useState(null); // { key, dur }
-      const [running, setRunning] = useState(false);
-      const [remaining, setRemaining] = useState(0);
       const [alarming, setAlarming] = useState(null);
       const { unlock, chime } = useAudio();
+      const activeRef = useRef(null);
+      activeRef.current = active;
+      const { remaining, running, start, pause, resume, reset: resetTimer } = useCountdown(() => {
+        const a = activeRef.current;
+        if (a) setAlarming({ key: a.key, dur: a.dur });
+        setActive(null);
+      });
 
-      useEffect(() => {
-        if (!running || !active) return;
-        const id = setInterval(() => setRemaining((r) => Math.max(0, r - 1)), 1000);
-        return () => clearInterval(id);
-      }, [running, active]);
-      useEffect(() => {
-        if (running && active && remaining === 0) { setAlarming({ key: active.key, dur: active.dur }); setRunning(false); setActive(null); }
-      }, [remaining, running, active]);
       useEffect(() => {
         if (!alarming) return;
         chime(); let n = 0;
@@ -595,14 +633,14 @@
         unlock();
         setAlarming((a) => (a && a.key === key ? null : a));
         setActive((cur) => {
-          if (cur && cur.key === key && cur.dur === dur) { setRunning((r) => !r); return cur; }
-          setRemaining(dur); setRunning(true); return { key, dur };
+          if (cur && cur.key === key && cur.dur === dur) { running ? pause() : resume(); return cur; }
+          start(dur); return { key, dur };
         });
-      }, [unlock]);
+      }, [unlock, running, pause, resume, start]);
       const onReset = useCallback((key) => {
         setAlarming((a) => (a && a.key === key ? null : a));
-        setActive((cur) => { if (cur && cur.key === key) { setRunning(false); setRemaining(0); return null; } return cur; });
-      }, []);
+        setActive((cur) => { if (cur && cur.key === key) { resetTimer(0); return null; } return cur; });
+      }, [resetTimer]);
       // Stop the ring AND auto-check the next side (right → left).
       const onStop = useCallback((key, sides) => {
         setAlarming((a) => (a && a.key === key ? null : a));
@@ -617,8 +655,8 @@
         setDone((d) => { const n = new Set(d); n.has(k) ? n.delete(k) : n.add(k); return n; });
       }, []);
       const resetAll = useCallback(() => {
-        setDone(new Set()); setActive(null); setRunning(false); setRemaining(0); setAlarming(null);
-      }, []);
+        setDone(new Set()); setActive(null); resetTimer(0); setAlarming(null);
+      }, [resetTimer]);
 
       const renderCheck = (ck, label) => {
         const on = done.has(ck);
@@ -754,6 +792,8 @@
       const isDone = pos === N + 1;
       const isStep = !isIntro && !isDone;
       const stepIdx = pos - 1;
+      const posRef = useRef(pos);
+      posRef.current = pos;
 
       useEffect(() => {
         try {
@@ -793,15 +833,38 @@
         setMode((m) => { const next = m === "night" ? "morning" : "night"; try { localStorage.setItem(MODE_KEY, next); } catch (e) {} return next; });
       }, []);
 
-      // Stopwatch: accumulate active (foreground) time on the current step, once per second.
+      // Stopwatch: credit real wall-clock time to the current step — including while the app is
+      // backgrounded/suspended and across page transitions — by diffing timestamps instead of
+      // counting ticks (mobile Safari throttles/freezes background intervals, which would silently
+      // lose time). `lastTickRef` holds the last time we credited the step; each flush adds the real
+      // gap since then. The outgoing step is flushed on cleanup (a page transition changes stepIdx),
+      // on visibility/focus return (crediting the whole background span at once), and on pagehide.
+      const lastTickRef = useRef(null);
       useEffect(() => {
-        if (!isStep) return;
-        const id = setInterval(() => {
-          if (document.visibilityState !== "visible") return;
-          setTimes((t) => { const nt = { ...t, [stepIdx]: (t[stepIdx] || 0) + 1 }; save(pos, nt); return nt; });
-        }, 1000);
-        return () => clearInterval(id);
-      }, [isStep, stepIdx, pos, save]);
+        if (!isStep) { lastTickRef.current = null; return; }
+        lastTickRef.current = Date.now();
+        const flush = () => {
+          if (lastTickRef.current == null) return;
+          const now = Date.now();
+          const delta = (now - lastTickRef.current) / 1000;
+          lastTickRef.current = now;
+          if (delta <= 0) return;
+          setTimes((t) => { const nt = { ...t, [stepIdx]: (t[stepIdx] || 0) + delta }; save(posRef.current, nt); return nt; });
+        };
+        const onVis = () => { if (document.visibilityState === "visible") flush(); };
+        const id = setInterval(flush, 1000);
+        document.addEventListener("visibilitychange", onVis);
+        window.addEventListener("focus", onVis);
+        window.addEventListener("pagehide", flush);
+        return () => {
+          flush();
+          clearInterval(id);
+          document.removeEventListener("visibilitychange", onVis);
+          window.removeEventListener("focus", onVis);
+          window.removeEventListener("pagehide", flush);
+          lastTickRef.current = null;
+        };
+      }, [isStep, stepIdx, save]);
 
       // Programmatic clearance: reserve exactly enough space so a panel's scroll ends ~14px above the
       // Done button. Uses the live button's resting bottom + height (transform-independent) minus the

@@ -104,7 +104,8 @@
     // ── Mobility circuit ──
     // Rollouts + Dynamic movements live on the "Walk and joint rollout" step; Stretches on "Do mobility training".
     const ROLLOUT_CIRCUIT = [
-      { section: "Rollouts", timed: false, items: ["Shoulders", "Neck", "Upper torso", "Elbow rotations", "Wrist rotations", "Hips", "Knees", "Ankles"] },
+      // anatomical order, head down
+      { section: "Rollouts", timed: false, items: ["Neck", "Shoulders", "Upper torso", "Elbows", "Wrists", "Hips", "Knees", "Ankles"] },
       { section: "Dynamic movements", timed: false, items: ["Jumps", "Lunges", "High knees", "Leg swings", "90-90 rotations", "Hip CARs"] },
     ];
     const MOBILITY = [
@@ -366,13 +367,11 @@
     .done-total{ font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:clamp(2.4rem,11vw,3.4rem);
       text-align:center; color:var(--txt); line-height:1; font-variant-numeric:tabular-nums; }
     .done-total-cap{ text-align:center; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--sub); margin:.4rem 0 .9rem; }
-    /* started / finished / elapsed — wall-clock stamps, plus the line reconciling them against
-       the summed per-step times shown above and below. */
-    .done-stamps{ display:flex; justify-content:center; gap:1.6rem; }
+    /* wall-clock stamps for the run, between the total and the per-step breakdown */
+    .done-stamps{ display:flex; justify-content:center; gap:1.9rem; margin:0 0 1rem; }
     .ds-cell{ display:flex; flex-direction:column; align-items:center; gap:.2rem; }
     .ds-k{ font-size:.62rem; letter-spacing:.13em; text-transform:uppercase; color:var(--sub); }
     .ds-v{ font-size:.95rem; color:var(--txt); font-variant-numeric:tabular-nums; }
-    .done-check{ text-align:center; font-size:.72rem; line-height:1.4; color:var(--sub); margin:.7rem 0 .2rem; }
     .done-breakdown{ list-style:none; margin:0; padding:0; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
       scrollbar-width:none;
       -webkit-mask-image:linear-gradient(180deg,transparent,#000 .6rem,#000 calc(100% - .6rem),transparent);
@@ -985,15 +984,6 @@
       }, [bodyBg, barColor]);
 
       const totalSec = Object.keys(times).reduce((a, k) => a + (times[k] || 0), 0);
-      // Cross-check the two independent measures of how long the routine took: wall-clock elapsed
-      // (finish stamp − start stamp) vs. the summed per-step times the stopwatch accrued. They
-      // should agree closely; a gap is time spent off-step (sitting on the intro page mid-run).
-      const elapsedSec = startedAt && endedAt ? (endedAt - startedAt) / 1000 : null;
-      const drift = elapsedSec == null ? null : elapsedSec - totalSec;
-      const checkNote = drift == null ? null
-        : Math.abs(drift) < 60 ? `step times reconcile with the clock (±${fmt(Math.abs(drift))})`
-        : drift > 0 ? `${fmt(drift)} of the elapsed time wasn't spent on any step`
-        : `${fmt(-drift)} more counted on steps than the clock elapsed`;
 
       if (!loaded) return <div className="mr-root" data-theme={theme} style={rootStyle}><style>{CSS}</style></div>;
       const stepText = isStep ? steps[stepIdx] : "";
@@ -1076,9 +1066,7 @@
                   <div className="done-stamps">
                     <div className="ds-cell"><span className="ds-k">started</span><span className="ds-v">{fmtClock(startedAt)}</span></div>
                     <div className="ds-cell"><span className="ds-k">finished</span><span className="ds-v">{fmtClock(endedAt)}</span></div>
-                    <div className="ds-cell"><span className="ds-k">elapsed</span><span className="ds-v">{elapsedSec == null ? "—" : fmt(elapsedSec)}</span></div>
                   </div>
-                  {checkNote && <div className="done-check">{checkNote}</div>}
                   <ul className="done-breakdown">
                     {steps.map((s, i) => (
                       <li key={i}><span className="db-name">{s}</span><span className="db-time">{fmt(times[i] || 0)}</span></li>

@@ -104,7 +104,7 @@
     // ── Mobility circuit ──
     // Rollouts + Dynamic movements live on the "Walk and joint rollout" step; Stretches on "Do mobility training".
     const ROLLOUT_CIRCUIT = [
-      { section: "Rollouts", timed: false, items: ["Shoulders", "Neck", "Upper torso", "Hips", "Knees", "Ankles"] },
+      { section: "Rollouts", timed: false, items: ["Shoulders", "Neck", "Upper torso", "Elbow rotations", "Wrist rotations", "Hips", "Knees", "Ankles"] },
       { section: "Dynamic movements", timed: false, items: ["Jumps", "Lunges", "High knees", "Leg swings", "90-90 rotations", "Hip CARs"] },
     ];
     const MOBILITY = [
@@ -154,6 +154,13 @@
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }
     function fmt(sec) { const s = Math.max(0, Math.floor(sec)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; }
+    // wall-clock time of day for the start/finish stamps on the done screen
+    function fmtClock(ms) {
+      if (!ms) return "—";
+      const d = new Date(ms), m = String(d.getMinutes()).padStart(2, "0");
+      const h = d.getHours() % 12 || 12;
+      return `${h}:${m} ${d.getHours() >= 12 ? "PM" : "AM"}`;
+    }
     function lerpHex(a, b, t) {
       const p = (h, i) => parseInt(h.replace("#", "").slice(i, i + 2), 16);
       const mix = (i) => Math.round(p(a, i) + (p(b, i) - p(a, i)) * t);
@@ -195,9 +202,24 @@
     }
     .mr-theme:hover{ color:var(--txt); transform:rotate(12deg); }
     .mr-top{ min-height:3.2rem; flex:0 0 auto; }
-    .mr-eyebrow-row{ display:flex; align-items:baseline; justify-content:space-between; gap:1rem; margin-bottom:.85rem; }
+    .mr-eyebrow-row{ display:flex; align-items:baseline; justify-content:space-between; gap:.6rem; margin-bottom:.85rem; }
     .mr-eyebrow{ font-size:.78rem; letter-spacing:.13em; text-transform:uppercase; color:var(--sub); }
+    .mr-watch-row{ display:flex; align-items:center; gap:.35rem; flex:0 0 auto; }
     .mr-watch{ font-size:.85rem; font-variant-numeric:tabular-nums; color:var(--sub); letter-spacing:.02em; flex:0 0 auto; }
+    /* Restart lives beside the stopwatch. It wipes the run, so it arms on the first tap and only
+       fires on a second one — a stray thumb up here would otherwise delete the routine. The armed
+       state fills the glyph and moves the wording into the eyebrow instead of widening the button:
+       a wider button pushes past the right edge on 375px-and-narrower screens. */
+    .mr-restart{ appearance:none; border:none; background:none; cursor:pointer; font-family:inherit; font-size:1rem;
+      line-height:1; color:var(--ghost); width:1.7rem; height:1.7rem; display:inline-flex; align-items:center;
+      justify-content:center; padding:0; border-radius:999px; transition:color 160ms ease, background 160ms ease;
+      /* keep a ~31px tap target without letting it set the eyebrow row's height (which would push
+         the progress bar down a dozen pixels) — the box bleeds into the row's own whitespace. */
+      margin:-.6rem -.15rem; }
+    .mr-restart:hover{ color:var(--txt); }
+    .mr-restart.armed{ background:var(--accent); color:var(--btnTxt); animation:mob-pulse 1s ease-in-out infinite; }
+    .mr-restart:focus-visible{ outline:2px solid var(--accent); outline-offset:3px; }
+    .mr-eyebrow.armed{ color:var(--accent); }
     .mr-track{ height:2px; width:100%; border-radius:2px; background:var(--track); overflow:hidden; }
     .mr-fill{ height:100%; background:var(--accent); border-radius:2px; transition:width 600ms cubic-bezier(.22,1,.36,1); }
     .mr-main{
@@ -343,7 +365,14 @@
     .mr-root[data-theme="dark"] .done-summary{ background:rgba(20,32,40,.24); border-color:rgba(255,255,255,.14); }
     .done-total{ font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:clamp(2.4rem,11vw,3.4rem);
       text-align:center; color:var(--txt); line-height:1; font-variant-numeric:tabular-nums; }
-    .done-total-cap{ text-align:center; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--sub); margin:.4rem 0 1rem; }
+    .done-total-cap{ text-align:center; font-size:.72rem; letter-spacing:.14em; text-transform:uppercase; color:var(--sub); margin:.4rem 0 .9rem; }
+    /* started / finished / elapsed — wall-clock stamps, plus the line reconciling them against
+       the summed per-step times shown above and below. */
+    .done-stamps{ display:flex; justify-content:center; gap:1.6rem; }
+    .ds-cell{ display:flex; flex-direction:column; align-items:center; gap:.2rem; }
+    .ds-k{ font-size:.62rem; letter-spacing:.13em; text-transform:uppercase; color:var(--sub); }
+    .ds-v{ font-size:.95rem; color:var(--txt); font-variant-numeric:tabular-nums; }
+    .done-check{ text-align:center; font-size:.72rem; line-height:1.4; color:var(--sub); margin:.7rem 0 .2rem; }
     .done-breakdown{ list-style:none; margin:0; padding:0; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
       scrollbar-width:none;
       -webkit-mask-image:linear-gradient(180deg,transparent,#000 .6rem,#000 calc(100% - .6rem),transparent);
@@ -413,7 +442,7 @@
     @media (prefers-reduced-motion: reduce){
       .mr-root,.mr-fill,.mr-btn,.mr-theme,.cta{ transition:none; }
       .mr-step,.mr-lead,.mr-sub,.mr-intro-line,.cta-intro,.mob-head,.mob-body,.mr-link,.step-timer{ animation:none; }
-      .mob-chip.stop,.step-go.stop,.step-time.ring,.scene,.scene *{ animation:none; }
+      .mob-chip.stop,.step-go.stop,.step-time.ring,.mr-restart.armed,.scene,.scene *{ animation:none; }
     }
     `;
 
@@ -793,6 +822,12 @@
       const [loaded, setLoaded] = useState(false);
       const [launching, setLaunching] = useState(false);
       const [times, setTimes] = useState({});   // stepIdx -> active seconds spent on that step
+      // Wall-clock stamps for the run: set when the routine is begun and when it reaches Done.
+      // Mirrored into refs so `save` always writes the current values (state lands a tick later).
+      const [startedAt, setStartedAt] = useState(null);
+      const [endedAt, setEndedAt] = useState(null);
+      const startedRef = useRef(null), endedRef = useRef(null);
+      const [confirmRestart, setConfirmRestart] = useState(false);
       const ctaRef = useRef(null);
 
       const steps = STEPS_BY_MODE[mode];
@@ -814,27 +849,45 @@
       }, []);
       useEffect(() => {
         const cap = STEPS_BY_MODE[mode].length + 1;
-        let p = 0, t = {};
+        let p = 0, t = {}, st = null, en = null;
         try {
           const raw = localStorage.getItem(progKey(mode));
-          if (raw) { const s = JSON.parse(raw); if (s.day === routineDay() && typeof s.pos === "number") { p = Math.max(0, Math.min(cap, s.pos)); t = s.times || {}; } }
+          if (raw) {
+            const s = JSON.parse(raw);
+            if (s.day === routineDay() && typeof s.pos === "number") {
+              p = Math.max(0, Math.min(cap, s.pos)); t = s.times || {};
+              st = s.startedAt || null; en = s.endedAt || null;
+            }
+          }
         } catch (e) {}
-        setPos(p); setTimes(t); setLoaded(true);
+        startedRef.current = st; endedRef.current = en;
+        setPos(p); setTimes(t); setStartedAt(st); setEndedAt(en); setLoaded(true);
       }, [mode]);
 
       const save = useCallback((p, t) => {
-        try { localStorage.setItem(progKey(mode), JSON.stringify({ day: routineDay(), pos: p, times: t })); } catch (e) {}
+        try {
+          localStorage.setItem(progKey(mode), JSON.stringify({
+            day: routineDay(), pos: p, times: t, startedAt: startedRef.current, endedAt: endedRef.current,
+          }));
+        } catch (e) {}
       }, [mode]);
 
       const go = useCallback((next) => {
         const cap = STEPS_BY_MODE[mode].length + 1;
         const clamped = Math.max(0, Math.min(cap, next));
+        // Landing on the done screen stamps the finish. Re-stamped if you go Back and finish again,
+        // so the stamp always reflects the last time the routine was actually completed. Only user
+        // navigation runs this, so a reload on the done screen keeps the original stamp.
+        if (clamped === cap) { endedRef.current = Date.now(); setEndedAt(endedRef.current); }
         setPos(clamped);
         setTimes((t) => { save(clamped, t); return t; });
       }, [mode, save]);
 
       const begin = useCallback(() => {
         setLaunching(true);       // fade the intro line out while the button morphs
+        // Only the first launch of a run stamps the start — stepping Back to the intro and forward
+        // again is navigation, not a restart, so the original start time stands.
+        if (startedRef.current == null) { startedRef.current = Date.now(); setStartedAt(startedRef.current); }
         go(1);
         setTimeout(() => setLaunching(false), 340);
       }, [go]);
@@ -876,6 +929,23 @@
         };
       }, [isStep, stepIdx, save]);
 
+      // Wipe the run and return to the opening page — for when the routine was started and then
+      // abandoned. Clearing lastTickRef first stops the outgoing step's flush (which runs on the
+      // effect cleanup, after this) from crediting time back onto the freshly emptied `times`.
+      const restart = useCallback(() => {
+        lastTickRef.current = null;
+        startedRef.current = null; endedRef.current = null;
+        setStartedAt(null); setEndedAt(null);
+        setPos(0); setTimes({}); save(0, {});
+      }, [save]);
+
+      // The header restart arms on first tap; disarm it if the second tap doesn't come.
+      useEffect(() => {
+        if (!confirmRestart) return;
+        const id = setTimeout(() => setConfirmRestart(false), 4000);
+        return () => clearTimeout(id);
+      }, [confirmRestart]);
+
       // Programmatic clearance: reserve exactly enough space so a panel's scroll ends ~14px above the
       // Done button. Uses the live button's resting bottom + height (transform-independent) minus the
       // frame's own bottom padding (which main already sits inside), so it isn't double-counted.
@@ -915,6 +985,15 @@
       }, [bodyBg, barColor]);
 
       const totalSec = Object.keys(times).reduce((a, k) => a + (times[k] || 0), 0);
+      // Cross-check the two independent measures of how long the routine took: wall-clock elapsed
+      // (finish stamp − start stamp) vs. the summed per-step times the stopwatch accrued. They
+      // should agree closely; a gap is time spent off-step (sitting on the intro page mid-run).
+      const elapsedSec = startedAt && endedAt ? (endedAt - startedAt) / 1000 : null;
+      const drift = elapsedSec == null ? null : elapsedSec - totalSec;
+      const checkNote = drift == null ? null
+        : Math.abs(drift) < 60 ? `step times reconcile with the clock (±${fmt(Math.abs(drift))})`
+        : drift > 0 ? `${fmt(drift)} of the elapsed time wasn't spent on any step`
+        : `${fmt(-drift)} more counted on steps than the clock elapsed`;
 
       if (!loaded) return <div className="mr-root" data-theme={theme} style={rootStyle}><style>{CSS}</style></div>;
       const stepText = isStep ? steps[stepIdx] : "";
@@ -940,8 +1019,17 @@
               {isStep && (
                 <>
                   <div className="mr-eyebrow-row">
-                    <span className="mr-eyebrow">{MODE_META[mode].label} · step {pos} of {N}</span>
-                    <span className="mr-watch" aria-label="time elapsed since starting">{fmt(totalSec)}</span>
+                    <span className={"mr-eyebrow" + (confirmRestart ? " armed" : "")}>
+                      {confirmRestart ? "tap again to restart" : `${MODE_META[mode].label} · step ${pos} of ${N}`}
+                    </span>
+                    <span className="mr-watch-row">
+                      <span className="mr-watch" aria-label="time elapsed since starting">{fmt(totalSec)}</span>
+                      <button
+                        className={"mr-restart" + (confirmRestart ? " armed" : "")}
+                        onClick={() => { if (confirmRestart) { setConfirmRestart(false); restart(); } else setConfirmRestart(true); }}
+                        aria-label={confirmRestart ? "Tap again to restart the routine" : "Restart the routine"}
+                      >↺</button>
+                    </span>
                   </div>
                   <div className="mr-track"><div className="mr-fill" style={{ width: `${(pos / N) * 100}%` }} /></div>
                 </>
@@ -985,6 +1073,12 @@
                 <div className="done-summary">
                   <div className="done-total">{fmt(totalSec)}</div>
                   <div className="done-total-cap">total time</div>
+                  <div className="done-stamps">
+                    <div className="ds-cell"><span className="ds-k">started</span><span className="ds-v">{fmtClock(startedAt)}</span></div>
+                    <div className="ds-cell"><span className="ds-k">finished</span><span className="ds-v">{fmtClock(endedAt)}</span></div>
+                    <div className="ds-cell"><span className="ds-k">elapsed</span><span className="ds-v">{elapsedSec == null ? "—" : fmt(elapsedSec)}</span></div>
+                  </div>
+                  {checkNote && <div className="done-check">{checkNote}</div>}
                   <ul className="done-breakdown">
                     {steps.map((s, i) => (
                       <li key={i}><span className="db-name">{s}</span><span className="db-time">{fmt(times[i] || 0)}</span></li>
@@ -992,7 +1086,7 @@
                   </ul>
                 </div>
                 <div className="done-actions">
-                  <button className="mr-btn done-restart" onClick={() => go(0)}>Start over</button>
+                  <button className="mr-btn done-restart" onClick={restart}>Start over</button>
                   <button className="mr-ghost done-back" onClick={() => go(N)}>‹ Back</button>
                 </div>
               </>

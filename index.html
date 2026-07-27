@@ -258,7 +258,11 @@
       transition: transform 660ms cubic-bezier(.5,0,.2,1), width 660ms cubic-bezier(.5,0,.2,1), height 660ms cubic-bezier(.5,0,.2,1),
                   border-radius 660ms cubic-bezier(.5,0,.2,1), background 180ms ease; }
     .cta:hover{ background:var(--accentH); }
-    .cta-intro{ transform:translate(-50%,-31dvh); width:17rem; height:6.5rem; border-radius:1.7rem; }
+    /* svh, not dvh: dvh tracks the mobile URL bar, so every time it collapsed this transform
+       changed — and since .cta transitions transform (for the intro→step morph), the button glided
+       ~30px over 660ms while the rest of the layout snapped. svh is fixed, so a viewport change is
+       now an instant relayout like everything else and only a real page change animates. */
+    .cta-intro{ transform:translate(-50%,-31svh); width:17rem; height:6.5rem; border-radius:1.7rem; }
     .cta-intro.enter{ animation:mr-fadein 620ms ease both; }
     .cta-step{ transform:translate(-50%,0); width:11rem; height:3.35rem; border-radius:999px; }
     /* labels are absolutely centered so the box's own width/height drives the shape; they crossfade */
@@ -267,6 +271,9 @@
     .cta-lbl.on{ opacity:1; }
     .cta-lbl-a{ font-family:'Fraunces',Georgia,serif; font-weight:400; font-size:clamp(1.12rem,4.6vw,1.4rem); line-height:1.3; }
     .cta-lbl-b{ font-weight:500; font-size:1.08rem; }
+    /* set while the viewport is changing size, so the resting position is re-laid-out instantly
+       instead of being animated by the morph transition above. */
+    .mr-noanim .cta{ transition:none !important; }
     .cta-back{ position:fixed; left:0; right:0; bottom:calc(.15rem + env(safe-area-inset-bottom)); text-align:center; z-index:4; }
     /* Standalone PWA: the fixed containing block already sits above the home-indicator inset, so
        adding env() again double-counts and floats the buttons ~34px too high. Drop it here → sits low. */
@@ -452,9 +459,16 @@
     // element/URL across the app, and reinforce with vibration.
     const AudioKit = (() => {
       let el = null, url = null, unlocked = false;
+      // To satisfy the autoplay policy the unlock has to actually play this element inside a user
+      // gesture, and it plays from the start. So the buffer opens with LEAD seconds of digital
+      // silence: whatever slips out before the muted play() gets paused is silence rather than the
+      // head of the bell, which is its loudest instant. Muting alone isn't enough — on the very
+      // platform that forces this dance (iOS), `muted` can land a beat late and leak a click on the
+      // first tap. chime() seeks past the run-in so the bell itself is still immediate.
+      const LEAD = 0.25;
       const buildWav = () => {
-        const rate = 44100, dur = 0.9, n = Math.floor(rate * dur);
-        const notes = [{ f: 880, at: 0 }, { f: 1174.66, at: 0.14 }]; // A5 then D6, a soft two-note bell
+        const rate = 44100, dur = LEAD + 0.9, n = Math.floor(rate * dur);
+        const notes = [{ f: 880, at: LEAD }, { f: 1174.66, at: LEAD + 0.14 }]; // A5 then D6, a soft two-note bell
         const buf = new ArrayBuffer(44 + n * 2), view = new DataView(buf);
         const wr = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
         wr(0, "RIFF"); view.setUint32(4, 36 + n * 2, true); wr(8, "WAVE"); wr(12, "fmt ");
@@ -479,6 +493,7 @@
         if (!a) return;
         try {
           a.muted = true;
+          try { a.currentTime = 0; } catch (e) {}   // start inside the silent run-in
           const p = a.play();
           const done = () => { try { a.pause(); a.currentTime = 0; } catch (e) {} a.muted = false; unlocked = true; };
           if (p && p.then) p.then(done).catch(() => { a.muted = false; }); else done();
@@ -486,7 +501,9 @@
       };
       const chime = () => {
         const a = ensureEl();
-        if (a) { try { a.muted = false; a.currentTime = 0; const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
+        // seek past the silent run-in so the bell sounds immediately; if the seek is refused
+        // (metadata not ready) it just plays from 0 and arrives LEAD later, which is harmless.
+        if (a) { try { a.muted = false; try { a.currentTime = LEAD; } catch (e) {} const p = a.play(); if (p && p.catch) p.catch(() => {}); } catch (e) {} }
         try { if (navigator.vibrate) navigator.vibrate([130, 60, 130]); } catch (e) {}
       };
       return { unlock, chime };
@@ -937,6 +954,30 @@
         setStartedAt(null); setEndedAt(null);
         setPos(0); setTimes({}); save(0, {});
       }, [save]);
+
+      // A mobile URL bar collapsing resizes the viewport, which shifts the CTA's resting position.
+      // .cta transitions transform (for the intro→step morph), so that shift was being animated —
+      // the button glided ~30px over 660ms while the rest of the layout snapped, which reads as a
+      // stray "button slides somewhere" right after the page opens. Suppress the transition for the
+      // duration of a viewport change so only real page changes animate. iOS reports these on
+      // visualViewport rather than window, so listen to both.
+      useEffect(() => {
+        let id = null;
+        const onResize = () => {
+          document.documentElement.classList.add("mr-noanim");
+          clearTimeout(id);
+          id = setTimeout(() => document.documentElement.classList.remove("mr-noanim"), 150);
+        };
+        const vv = window.visualViewport;
+        window.addEventListener("resize", onResize);
+        if (vv) vv.addEventListener("resize", onResize);
+        return () => {
+          window.removeEventListener("resize", onResize);
+          if (vv) vv.removeEventListener("resize", onResize);
+          clearTimeout(id);
+          document.documentElement.classList.remove("mr-noanim");
+        };
+      }, []);
 
       // The header restart arms on first tap; disarm it if the second tap doesn't come.
       useEffect(() => {

@@ -41,30 +41,35 @@
 
     // "Psychohabitual adjustments to keep in mind" — copied from the Evernote note.
     const PSYCHO_STEP = "Psychohabitual adjustments to keep in mind";
+    // Only the note's FIRST section (the top h1) feeds this panel. The h2 sections that follow it
+    // — "Previous task management notes", "Behavioral restrictions and modifications",
+    // "Sociobehavioral modifications" — are deliberately not surfaced in the app.
     const PSYCHO = [
-      { t: "Cognition and mindset: Do more cerebral and less instinctive thought.", c: [
-        "Tasks one-at-a-time, without completion pressure and with focus: slow down, do things without rushing or having time pressure, and do them precisely and intentionally. Enter flow state with low adrenaline and strain if you're not. Don't be so focused on trying to complete something swiftly, instead, go through executing it deliberately, with a good sustainable pace and with thoughtfulness. Don't rush speaking and being rambly, give yourself time to articulate accurately. Be mindful when transitioning between tasks. Don't load your mind with tasks, rely on task management systems",
-        "Be happy, optimistic, loving, complimentary, and positive",
-        "Feel hopeful, proactive, confident, bold, take agency seriously, and feel very much like you're capable of inducing change and progress in your life. Be realistic about how long things take and have a keep calm and optimize mentality",
-        "Be self-aware of biological needs and emotional state",
+      { t: "Deload context from (clear) your mind and relax", c: [
+        { t: "Do tasks", c: [
+          "one-at-a-time",
+          "with a cerebral mindset",
+          "without completion pressure",
+          "with dedication and focus",
+          "optimize for sufficiency, strategy, and comprehensiveness/precision.",
+          "don't be so focused on trying to complete something swiftly, instead, go through executing it deliberately, with a good sustainable pace and with thoughtfulness.",
+          "for long tasks, give yourself the space to load context and to work through it.",
+        ]},
       ]},
+      "Be mindful when transitioning between tasks. Make sure your mind isn't overloaded with tasks when doing so, rely on task management systems.",
+      "Think before you speak. Give yourself time to. Avoid being rambly/impercise, give yourself time to articulate accurately.",
+      { t: "Don't feel desperate.", c: [
+        "Be happy, calm, complimentary, and positive.",
+        "Make sure you feel like you have agency and are capable of creating change.",
+        "Feel hopeful and optimistic be proactive and confident, be reasonably bold and take agency seriously.",
+        "Feel very much like you're capable of inducing change and progress in your life. Be contemplatively realistic about how long things take, how feasible they are, and have a keep calm and optimize mentality",
+      ]},
+      "Be self-aware of biological needs and emotional state",
       { t: "Commitments and goals: Be highly attentive to when you are accepting to do something or committing to something.", c: [
         "Explicitly write down what you're meant to do",
         "Make sure that when committing to something or accepting to doing it, the appropriate resources are available and allocated",
       ]},
-      { t: "Attention control:", c: [
-        { t: "Task management", c: [
-          { t: "Eliminate hesitation to begin tasks that have difficult paths to completion", c: [
-            "Stop all activities and thoughts in the moment and contemplate whether I should start the task, continue to wait to do the task, or do something else in the meantime",
-          ]},
-          "List and time all tasks as they come to mind rather than storing them in temporary conscious memory",
-          "Patiently evaluate all scenarios, choosing best-case scenario and proceed",
-          "Eliminate deep and hard to notice fatiguing/stressful/negative emotions induced by thinking about starting tasks",
-        ]},
-        "Either be attentive to conversations being had or cease them rather than contemplating during them",
-        "Write comprehensively to eliminate necessity of remembering supplementary information and ensure that upon revisiting a note or topic, it's possible to fully understand it >95% of the time",
-        "Be intolerant of wasted time: Structure activities such that all require deep focus and a detail-oriented mindset.",
-      ]},
+      "Do the highest priority tasks first, regardless of difficulty, unless there are swift <5m tasks available for quick completion",
     ];
 
     const MORNING_STEPS = [

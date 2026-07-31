@@ -129,6 +129,29 @@
     const MODE_KEY = "routine-mode";
     const progKey = (m) => `routine-progress-${m}`;
 
+    // Per-step scratch state (checklist ticks, a running hold timer, a chosen duration). iOS
+    // discards a backgrounded tab whenever it wants memory, and there is no way to stop it — so
+    // instead of trying to stay alive, every panel writes its state as it changes and restores it
+    // on load. Records are stamped with the routine day so they expire with the day's progress.
+    const panelKey = (m, p) => `routine-panel-${m}-${p}`;
+    function loadPanel(k) {
+      if (!k) return null;
+      try { const s = JSON.parse(localStorage.getItem(k)); return s && s.day === routineDay() ? s : null; } catch (e) { return null; }
+    }
+    function savePanel(k, v) {
+      if (!k) return;
+      try { localStorage.setItem(k, JSON.stringify({ ...v, day: routineDay() })); } catch (e) {}
+    }
+    function dropPanels(m) {
+      try {
+        const pre = `routine-panel-${m}-`;
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && k.indexOf(pre) === 0) localStorage.removeItem(k);
+        }
+      } catch (e) {}
+    }
+
     // Deep links — open the native apps.
     const EN_UID = "27366594", EN_SHARD = "s222";
     const enLink = (guid) => `evernote:///view/${EN_UID}/${EN_SHARD}/${guid}/${guid}/`;
@@ -539,10 +562,15 @@
     // when the tab is backgrounded/suspended (mobile Safari throttles or freezes intervals): on
     // return we recompute and fire the expiry if it already elapsed. The interval only drives the
     // on-screen refresh — losing ticks in the background no longer loses time.
-    function useCountdown(onExpire, initial = 0) {
-      const [remaining, setRemaining] = useState(initial);
-      const [running, setRunning] = useState(false);
-      const endRef = useRef(null);            // ms deadline while running; null when paused/idle
+    // `deadline` seeds a timer that was still running when the page was discarded. It has to be
+    // seeded at construction rather than restored from an effect: sibling effects that resync an
+    // idle timer to its chosen duration read the same pre-update `running` and would null the
+    // deadline right back out.
+    function useCountdown(onExpire, initial = 0, deadline = null) {
+      const live = deadline && deadline > Date.now() ? deadline : null;
+      const [remaining, setRemaining] = useState(() => (live ? Math.max(0, Math.round((live - Date.now()) / 1000)) : initial));
+      const [running, setRunning] = useState(!!live);
+      const endRef = useRef(live);            // ms deadline while running; null when paused/idle
       const onExpireRef = useRef(onExpire);
       onExpireRef.current = onExpire;
 
@@ -578,20 +606,34 @@
       }, []);
       const reset = useCallback((secs) => { endRef.current = null; setRunning(false); setRemaining(secs != null ? secs : 0); }, []);
 
-      return { remaining, running, start, pause, resume, reset };
+      return { remaining, running, start, pause, resume, reset, endRef };
     }
 
     // Timer with an optional duration picker: chevrons cycle presets (and an extra "custom" slot),
     // and fade out once the timer is running.
-    function StepTimer({ presets = [5], custom = false }) {
-      const [sel, setSel] = useState(() => { const i = presets.indexOf(5); return i >= 0 ? i : 0; });
-      const [customSec, setCustomSec] = useState(null);  // non-null → a tapped-in custom time overrides the preset
+    function StepTimer({ presets = [5], custom = false, storeKey = null }) {
+      const [saved] = useState(() => (storeKey ? loadPanel(storeKey) : null));
+      // seed the duration straight from storage so the first paint is already correct
+      const [sel, setSel] = useState(() => {
+        if (saved && typeof saved.sel === "number" && saved.sel < presets.length) return saved.sel;
+        const i = presets.indexOf(5); return i >= 0 ? i : 0;
+      });
+      const [customSec, setCustomSec] = useState(saved && saved.customSec != null ? saved.customSec : null);
       const [editing, setEditing] = useState(false);
       const [draft, setDraft] = useState("");
       const seconds = customSec != null ? customSec : Math.max(1, presets[sel]) * 60;
       const [alarming, setAlarming] = useState(false);
       const { unlock, chime } = useAudio();
-      const { remaining, running, start, pause, resume, reset: resetTimer } = useCountdown(() => setAlarming(true), seconds);
+      // A countdown still running when the page was discarded picks up against its original
+      // deadline. One that had already elapsed comes back idle rather than alarming on arrival —
+      // the sit is long over, and a chime out of nowhere would only startle.
+      const { remaining, running, start, pause, resume, reset: resetTimer, endRef } =
+        useCountdown(() => setAlarming(true), seconds, saved && saved.endAt);
+
+      useEffect(() => {
+        if (!storeKey) return;
+        savePanel(storeKey, { sel, customSec, endAt: running ? endRef.current : null });
+      }, [storeKey, sel, customSec, running]);
 
       // while idle, keep the countdown synced to the chosen duration
       useEffect(() => { if (!running && !alarming) resetTimer(seconds); }, [seconds, running, alarming, resetTimer]);
@@ -657,19 +699,36 @@
       );
     }
 
-    function MobilityChecklist({ sections = MOBILITY, title = "Mobility training", footer = null }) {
+    function MobilityChecklist({ sections = MOBILITY, title = "Mobility training", footer = null, storeKey = null }) {
       const total = sectionsTotal(sections);
-      const [done, setDone] = useState(() => new Set());
-      const [active, setActive] = useState(null); // { key, dur }
+      const [saved] = useState(() => (storeKey ? loadPanel(storeKey) : null));
+      // Seed ticks and any in-flight hold from storage, so a restored panel is correct on the first
+      // frame: still running → resumes against its original deadline; paused → comes back paused
+      // with the same time left; already elapsed → idle, rather than alarming on arrival.
+      const [done, setDone] = useState(() => new Set((saved && saved.done) || []));
+      const [active, setActive] = useState(() => {
+        if (!saved || !saved.active) return null;
+        return (saved.endAt && saved.endAt > Date.now()) || saved.paused > 0 ? saved.active : null;
+      });
       const [alarming, setAlarming] = useState(null);
       const { unlock, chime } = useAudio();
       const activeRef = useRef(null);
       activeRef.current = active;
-      const { remaining, running, start, pause, resume, reset: resetTimer } = useCountdown(() => {
+      const { remaining, running, start, pause, resume, reset: resetTimer, endRef } = useCountdown(() => {
         const a = activeRef.current;
         if (a) setAlarming({ key: a.key, dur: a.dur });
         setActive(null);
-      });
+      }, (saved && saved.paused) || 0, saved && saved.endAt);
+
+      // endRef only moves on start/pause/resume, each of which flips `active` or `running`
+      useEffect(() => {
+        if (!storeKey) return;
+        savePanel(storeKey, {
+          done: [...done], active,
+          endAt: active && running ? endRef.current : null,
+          paused: active && !running ? remaining : null,
+        });
+      }, [storeKey, done, active, running]);
 
       useEffect(() => {
         if (!alarming) return;
@@ -845,6 +904,7 @@
       const startedRef = useRef(null), endedRef = useRef(null);
       const [confirmRestart, setConfirmRestart] = useState(false);
       const ctaRef = useRef(null);
+      const lastTickRef = useRef(null);   // last moment credited to the current step (see stopwatch below)
 
       const steps = STEPS_BY_MODE[mode];
       const N = steps.length;
@@ -888,16 +948,31 @@
         } catch (e) {}
       }, [mode]);
 
+      // Ends the run and returns to the opening page: the stopwatch, the stamps and the panels'
+      // scratch state all clear, so the next tap on the mantra starts a genuinely fresh routine
+      // rather than resuming the old one. Clearing lastTickRef first stops the outgoing step's
+      // flush (which runs on the effect cleanup, after this) from crediting time back onto the
+      // freshly emptied `times`.
+      const resetRun = useCallback(() => {
+        lastTickRef.current = null;
+        startedRef.current = null; endedRef.current = null;
+        setStartedAt(null); setEndedAt(null);
+        setPos(0); setTimes({}); save(0, {});
+        dropPanels(mode);
+      }, [save, mode]);
+
       const go = useCallback((next) => {
         const cap = STEPS_BY_MODE[mode].length + 1;
         const clamped = Math.max(0, Math.min(cap, next));
+        // Reaching the opening page — however you got there — ends the run.
+        if (clamped === 0) { resetRun(); return; }
         // Landing on the done screen stamps the finish. Re-stamped if you go Back and finish again,
         // so the stamp always reflects the last time the routine was actually completed. Only user
         // navigation runs this, so a reload on the done screen keeps the original stamp.
         if (clamped === cap) { endedRef.current = Date.now(); setEndedAt(endedRef.current); }
         setPos(clamped);
         setTimes((t) => { save(clamped, t); return t; });
-      }, [mode, save]);
+      }, [mode, save, resetRun]);
 
       const begin = useCallback(() => {
         setLaunching(true);       // fade the intro line out while the button morphs
@@ -918,7 +993,6 @@
       // lose time). `lastTickRef` holds the last time we credited the step; each flush adds the real
       // gap since then. The outgoing step is flushed on cleanup (a page transition changes stepIdx),
       // on visibility/focus return (crediting the whole background span at once), and on pagehide.
-      const lastTickRef = useRef(null);
       useEffect(() => {
         if (!isStep) { lastTickRef.current = null; return; }
         lastTickRef.current = Date.now();
@@ -930,7 +1004,10 @@
           if (delta <= 0) return;
           setTimes((t) => { const nt = { ...t, [stepIdx]: (t[stepIdx] || 0) + delta }; save(posRef.current, nt); return nt; });
         };
-        const onVis = () => { if (document.visibilityState === "visible") flush(); };
+        // Flush in BOTH directions: on the way out so the last seconds are banked before iOS can
+        // discard the page (pagehide is not guaranteed to fire), and on the way back to credit the
+        // whole span spent away in one go.
+        const onVis = () => flush();
         const id = setInterval(flush, 1000);
         document.addEventListener("visibilitychange", onVis);
         window.addEventListener("focus", onVis);
@@ -944,16 +1021,6 @@
           lastTickRef.current = null;
         };
       }, [isStep, stepIdx, save]);
-
-      // Wipe the run and return to the opening page — for when the routine was started and then
-      // abandoned. Clearing lastTickRef first stops the outgoing step's flush (which runs on the
-      // effect cleanup, after this) from crediting time back onto the freshly emptied `times`.
-      const restart = useCallback(() => {
-        lastTickRef.current = null;
-        startedRef.current = null; endedRef.current = null;
-        setStartedAt(null); setEndedAt(null);
-        setPos(0); setTimes({}); save(0, {});
-      }, [save]);
 
       // A mobile URL bar collapsing resizes the viewport, which shifts the CTA's resting position.
       // .cta transitions transform (for the intro→step morph), so that shift was being animated —
@@ -1057,7 +1124,7 @@
                       <span className="mr-watch" aria-label="time elapsed since starting">{fmt(totalSec)}</span>
                       <button
                         className={"mr-restart" + (confirmRestart ? " armed" : "")}
-                        onClick={() => { if (confirmRestart) { setConfirmRestart(false); restart(); } else setConfirmRestart(true); }}
+                        onClick={() => { if (confirmRestart) { setConfirmRestart(false); resetRun(); } else setConfirmRestart(true); }}
                         aria-label={confirmRestart ? "Tap again to restart the routine" : "Restart the routine"}
                       >↺</button>
                     </span>
@@ -1073,12 +1140,12 @@
 
             <main className={"mr-main" + (isPanel ? " panel" : "")}>
               {isPsycho && <PsychoReview key={mode + pos} />}
-              {isMobility && <MobilityChecklist key={mode + pos} sections={MOBILITY} title="Mobility training" />}
-              {isWalk && <MobilityChecklist key={mode + pos} sections={ROLLOUT_CIRCUIT} title="Walk and joint rollout" />}
+              {isMobility && <MobilityChecklist key={mode + pos} sections={MOBILITY} title="Mobility training" storeKey={panelKey(mode, pos)} />}
+              {isWalk && <MobilityChecklist key={mode + pos} sections={ROLLOUT_CIRCUIT} title="Walk and joint rollout" storeKey={panelKey(mode, pos)} />}
               {isStep && !isPanel && (
                 <div className="mr-stepwrap" key={mode + pos}>
                   <p className="mr-step">{stepText}</p>
-                  {isMeditate && <StepTimer presets={[1, 5, 10]} custom={true} />}
+                  {isMeditate && <StepTimer presets={[1, 5, 10]} custom={true} storeKey={panelKey(mode, pos)} />}
                   {link && <a className="mr-link" href={link.href}>{link.label}</a>}
                 </div>
               )}
@@ -1115,7 +1182,7 @@
                   </ul>
                 </div>
                 <div className="done-actions">
-                  <button className="mr-btn done-restart" onClick={restart}>Start over</button>
+                  <button className="mr-btn done-restart" onClick={resetRun}>Start over</button>
                   <button className="mr-ghost done-back" onClick={() => go(N)}>‹ Back</button>
                 </div>
               </>

@@ -379,10 +379,12 @@
     .mob-reset:hover{ color:var(--txt); }
 
     /* psychohabitual nested list */
-    .ph-list{ margin:0; padding-left:1.15rem; }
-    .ph-list.ph-d0{ list-style:none; padding-left:0; }
-    .ph-li{ font-size:.95rem; line-height:1.45; color:var(--txt); margin:.32rem 0; }
-    .ph-d0 > .ph-head{ font-family:'Fraunces',Georgia,serif; font-weight:500; font-size:1.08rem; margin:1rem 0 .3rem; }
+    /* A plain nested bullet list, rendered the way the note itself renders: every level bulleted
+       and indented, following the browser's disc → circle → square progression. Nothing is styled
+       as a heading — in the note these are all just bullets, and singling out the ones that happen
+       to have children left the standalone items looking like stray unbulleted paragraphs. */
+    .ph-list{ margin:.2rem 0 0; padding-left:1.25rem; }
+    .ph-li{ font-size:.95rem; line-height:1.45; color:var(--txt); margin:.32rem 0; padding-left:.1rem; }
 
     /* ── Done-screen outdoors scene (full-screen) ── */
     .done-restart{ min-width:auto; padding:.9rem 2.4rem; }
@@ -846,7 +848,7 @@
         <ul className={"ph-list ph-d" + depth}>
           {nodes.map((n, i) => (typeof n === "string"
             ? <li key={i} className="ph-li">{n}</li>
-            : <li key={i} className="ph-li ph-head">{n.t}<PsychoNodes nodes={n.c} depth={depth + 1} /></li>
+            : <li key={i} className="ph-li">{n.t}<PsychoNodes nodes={n.c} depth={depth + 1} /></li>
           ))}
         </ul>
       );

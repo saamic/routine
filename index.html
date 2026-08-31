@@ -944,6 +944,16 @@
             if (s.day === routineDay() && typeof s.pos === "number") {
               p = Math.max(0, Math.min(cap, s.pos)); t = s.times || {};
               st = s.startedAt || null; en = s.endedAt || null;
+              // iOS discards suspended PWAs, and the in-memory stopwatch anchor dies with the
+              // page. `at` is the last moment the old page was alive (every save stamps it, and
+              // the stopwatch saves each second and on the way to background), so a load mid-step
+              // credits the whole dead span to the step that was showing. One recalibration per
+              // reload; no save-back needed — the first flush banks it, and until then a repeat
+              // discard just recomputes the same span from the still-stored `at`.
+              if (p > 0 && p < cap && Number.isFinite(s.at)) {
+                const gap = (Date.now() - s.at) / 1000;
+                if (gap > 0) t = { ...t, [p - 1]: (t[p - 1] || 0) + gap };
+              }
             }
           }
         } catch (e) {}
@@ -955,6 +965,7 @@
         try {
           localStorage.setItem(progKey(mode), JSON.stringify({
             day: routineDay(), pos: p, times: t, startedAt: startedRef.current, endedAt: endedRef.current,
+            at: Date.now(),   // last-alive stamp: lets a reload credit the span a discarded page was dead
           }));
         } catch (e) {}
       }, [mode]);
@@ -1004,6 +1015,8 @@
       // lose time). `lastTickRef` holds the last time we credited the step; each flush adds the real
       // gap since then. The outgoing step is flushed on cleanup (a page transition changes stepIdx),
       // on visibility/focus return (crediting the whole background span at once), and on pagehide.
+      // If iOS discards the page outright, the span away is recovered at reload from the saved
+      // `at` stamp instead (see the restore effect above).
       useEffect(() => {
         if (!isStep) { lastTickRef.current = null; return; }
         lastTickRef.current = Date.now();

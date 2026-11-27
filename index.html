@@ -112,6 +112,8 @@
 
     // ── Mobility circuit ──
     // Rollouts + Dynamic movements live on the "Walk and joint rollout" step; Stretches on "Do mobility training".
+    // Night has no walk step, so its "Mobility training" panel opens with the Rollouts (not the
+    // Dynamic movements) ahead of the Stretches.
     const ROLLOUT_CIRCUIT = [
       // anatomical order, head down
       { section: "Rollouts", timed: false, items: ["Neck", "Shoulders", "Upper torso", "Elbows", "Wrists", "Hips", "Knees", "Ankles"] },
@@ -128,6 +130,7 @@
         { name: "Butterfly stretch", sides: false },
       ] },
     ];
+    const NIGHT_MOBILITY = [ROLLOUT_CIRCUIT.find((s) => s.section === "Rollouts"), ...MOBILITY];
     const itemName = (it) => (typeof it === "object" ? it.name : it);
     const itemSides = (it) => (typeof it === "object" ? !!it.sides : false);
     const sectionsTotal = (secs) => secs.reduce((n, s) => n + s.items.reduce((m, it) => m + (itemSides(it) ? 2 : 1), 0), 0);
@@ -1164,7 +1167,7 @@
 
             <main className={"mr-main" + (isPanel ? " panel" : "")}>
               {isPsycho && <PsychoReview key={mode + pos} />}
-              {isMobility && <MobilityChecklist key={mode + pos} sections={MOBILITY} title="Mobility training" storeKey={panelKey(mode, pos)} />}
+              {isMobility && <MobilityChecklist key={mode + pos} sections={mode === "night" ? NIGHT_MOBILITY : MOBILITY} title="Mobility training" storeKey={panelKey(mode, pos)} />}
               {isWalk && <MobilityChecklist key={mode + pos} sections={ROLLOUT_CIRCUIT} title="Walk and joint rollout" storeKey={panelKey(mode, pos)} />}
               {isStep && !isPanel && (
                 <div className="mr-stepwrap" key={mode + pos}>
